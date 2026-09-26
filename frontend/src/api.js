@@ -2,8 +2,8 @@ export async function api(path, options = {}) {
   const response = await fetch('/api' + path, {
     credentials: 'same-origin',
     ...options,
-    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'campus-web', ...options.headers },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    headers: { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), 'X-Requested-With': 'campus-web', ...options.headers },
+    body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {

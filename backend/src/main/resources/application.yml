@@ -3,6 +3,10 @@ server:
   error:
     include-message: never
 spring:
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/campusjobs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: root
@@ -17,6 +21,7 @@ spring:
   jackson:
     time-zone: Asia/Shanghai
 app:
+  wallet-mode: ${WALLET_MODE:SIMULATED}
   encryption-key: ${APP_ENCRYPTION_KEY}
   lookup-key: ${APP_LOOKUP_KEY}
   secure-cookie: true

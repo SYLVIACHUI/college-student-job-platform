@@ -41,12 +41,14 @@ public class AuthService {
         if (dev) return Map.of("message", "开发验证码已生成（有效期5分钟）", "debugCode", code, "expiresIn", 300);
         return Map.of("message", "验证码已发送", "expiresIn", 300);
     }
+    @org.springframework.transaction.annotation.Transactional
     public Map<String,Object> register(String role, String phone, String code, String password) {
         String hash = crypto.hash(phone);
         limit("otp-attempt:" + role + ":" + hash, 5, Duration.ofMinutes(5));
         if (!store.consume("otp:" + role + ":" + hash, crypto.hash(code))) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码错误、已使用或已过期");
         String id = UUID.randomUUID().toString();
         users.jdbc().update("INSERT INTO app_user(id,role,account_hash,phone_cipher,password_hash) VALUES(?,?,?,?,?)", id, role, hash, crypto.encrypt(phone), passwords.encode(password));
+        users.jdbc().update("INSERT INTO wallet(user_id) VALUES(?)",id);
         return Map.of("message", "注册成功，请使用手机号登录", "account", phone);
     }
     public String login(String role, String phone, String password, String ip) {
@@ -78,6 +80,9 @@ public class AuthService {
         String phone = crypto.decrypt((String)user.get("phone_cipher"));
         out.put("account", phone.substring(0,3) + "****" + phone.substring(7));
         out.put("phone", out.get("account"));
+        for (String field : List.of("nickname", "birthday", "grade", "major", "bio")) out.put(field, user.get(field));
+        out.put("display_name", ProfileService.displayName(user));
+        out.put("avatar_url", ProfileService.avatarUrl(user));
         out.put("publish_count", users.jdbc().queryForObject("SELECT COUNT(*) FROM job WHERE publisher_id=?", Long.class, user.get("id")));
         return out;
     }

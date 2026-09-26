@@ -11,6 +11,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 
 @RestControllerAdvice
 public class ApiError {
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ResponseEntity<?> uploadTooLarge() { return ResponseEntity.status(413).body(Map.of("message", "头像文件不能超过2MB")); }
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     ResponseEntity<?> missing() { return ResponseEntity.status(404).body(Map.of("message", "接口不存在")); }
     @ExceptionHandler(ResponseStatusException.class)
