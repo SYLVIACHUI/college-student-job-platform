@@ -1,0 +1,24 @@
+server:
+  port: 8080
+  error:
+    include-message: never
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/campusjobs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: root
+    password: nmx2165427
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: nmx2165427
+      database: 0
+      timeout: 3s
+  jackson:
+    time-zone: Asia/Shanghai
+app:
+  encryption-key: ${APP_ENCRYPTION_KEY}
+  lookup-key: ${APP_LOOKUP_KEY}
+  secure-cookie: true
+  sms-url: ${SMS_GATEWAY_URL:}
+  sms-token: ${SMS_GATEWAY_TOKEN:}
