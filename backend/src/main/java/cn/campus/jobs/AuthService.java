@@ -47,7 +47,7 @@ public class AuthService {
         limit("otp-attempt:" + role + ":" + hash, 5, Duration.ofMinutes(5));
         if (!store.consume("otp:" + role + ":" + hash, crypto.hash(code))) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "验证码错误、已使用或已过期");
         String id = UUID.randomUUID().toString();
-        users.jdbc().update("INSERT INTO app_user(id,role,account_hash,phone_cipher,password_hash) VALUES(?,?,?,?,?)", id, role, hash, crypto.encrypt(phone), passwords.encode(password));
+        users.create(id, role, hash, crypto.encrypt(phone), passwords.encode(password));
         users.jdbc().update("INSERT INTO wallet(user_id) VALUES(?)",id);
         return Map.of("message", "注册成功，请使用手机号登录", "account", phone);
     }
@@ -61,7 +61,7 @@ public class AuthService {
         byte[] bytes = new byte[32]; random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         store.put("session:" + crypto.hash(token), (String) user.get("id"), Duration.ofHours(12));
-        users.jdbc().update("UPDATE app_user SET last_login_at=CURRENT_TIMESTAMP WHERE id=?", user.get("id"));
+        users.jdbc().update("UPDATE " + users.tableForId(user.get("id").toString()) + " SET last_login_at=CURRENT_TIMESTAMP WHERE id=?", user.get("id"));
         return token;
     }
     public String token(HttpServletRequest request) {

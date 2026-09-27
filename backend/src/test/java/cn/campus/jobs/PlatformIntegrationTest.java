@@ -45,7 +45,7 @@ class PlatformIntegrationTest {
         Cookie publisher=registerLogin("PUBLISHER","13900000001");
         Cookie student=registerLogin("STUDENT","13900000001");
         assertTrue(publisher.isHttpOnly());
-        Map<String,Object> job=Map.of("title","图书馆助理","description","周末整理图书","location","大学城","pay",150);
+        Map<String,Object> job=Map.of("title","图书馆助理","description","周末整理图书","location","大学城","pay",150,"category","校园服务","requiredCount",2,"requirements","认真负责","startsAt","2099-01-01T09:00:00","durationMinutes",240);
         postJson("/jobs",job,publisher,403);
         postJson("/jobs",job,student,403);
         postJson("/verification",Map.of("organization","青禾科技","surname","张","name","三","identityNumber","11010519491231002X","email","test@example.com"),publisher,200);
@@ -70,7 +70,7 @@ class PlatformIntegrationTest {
     @Test void encryptedStorageAndNoSensitiveResponses() throws Exception {
         Cookie c=registerLogin("STUDENT","13900000002");
         postJson("/verification",Map.of("school","大学","name","敏感姓名","studentNumber","SECRET123"),c,200);
-        var row=jdbc.queryForMap("SELECT * FROM app_user WHERE id=?",me(c).get("id").asText());
+        var row=jdbc.queryForMap("SELECT * FROM student_user WHERE id=?",me(c).get("id").asText());
         assertNotEquals("13900000002",row.get("phone_cipher"));
         assertNotEquals("Password123",row.get("password_hash"));
         assertNotEquals("敏感姓名",row.get("name_cipher"));

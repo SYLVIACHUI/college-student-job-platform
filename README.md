@@ -112,15 +112,17 @@ SMS_GATEWAY_TOKEN=网关鉴权令牌
 
 当前已实现认证资料存储、提交记录、待审核/通过/驳回状态机与审核结果落库边界，没有调用任何外部 AI，也没有把格式检查当成实名认证。
 
-待审核任务由 `app_user.verification_status=PENDING` 与 `review_id` 定位，`verification_event` 记录历史。未来受信任的审核 worker 读取资料并通过 `VerificationService.applyDecision(userId, reviewId, approved, note)` 应用结果。该方法会锁行并校验任务版本，拒绝重复或过期结果。`note` 最多 500 字符且不能包含敏感原文。
+待审核任务由 `publisher_user` / `student_user` 的 `verification_status=PENDING` 与 `review_id` 定位，`verification_event` 记录历史。未来受信任的审核 worker 读取资料并通过 `VerificationService.applyDecision(userId, reviewId, approved, note)` 应用结果。该方法会锁行并校验任务版本，拒绝重复或过期结果。`note` 最多 500 字符且不能包含敏感原文。
 
 真实 AI 服务、提示词、证件/学校核验来源、人工复核规则及异步任务重试由后续阶段接入。现在正式环境提交认证后保持待审核。开发模拟审核控制器仅在 `dev` Profile 注册，且只能作用于当前用户，不是管理后台或正式审核接口。
 
 ## 数据模型与隐私
 
+企业与学生现已分为独立实体、数据库表和前端入口，文件位置及升级步骤见 [企业与学生分表说明](docs/企业与学生分表说明.md)。
+
 | 需求字段 | 存储方式 |
 | --- | --- |
-| 单位名、姓氏、学校名、邮箱 | `app_user` 对应字段，邮箱可选 |
+| 单位名、姓氏、学校名、邮箱 | `publisher_user` / `student_user` 对应字段，邮箱可选 |
 | 发布人名字 / 学生姓名 | AES-256-GCM `name_cipher` |
 | 身份证号 | AES-256-GCM `identity_cipher` |
 | 学号 | AES-256-GCM `student_number_cipher` |

@@ -13,8 +13,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ProfileService {
     private final UserRepository users;
+    private final Crypto crypto;
     private static final Set<String> GRADES = Set.of("大一","大二","大三","大四","大五","硕士","博士");
-    public ProfileService(UserRepository users) { this.users = users; }
+    public ProfileService(UserRepository users,Crypto crypto) { this.users = users; this.crypto=crypto; }
     public static String displayName(Map<String,Object> user) {
         Object nick = user.get("nickname");
         return nick != null && !nick.toString().isBlank() ? nick.toString() :
@@ -31,8 +32,8 @@ public class ProfileService {
         String grade = clean(input.grade());
         if (grade != null && !GRADES.contains(grade)) bad("请选择有效年级");
         if (!student && (grade != null || clean(input.major()) != null)) bad("企业账号不能设置学生学籍资料");
-        users.jdbc().update("UPDATE app_user SET nickname=?,birthday=?,grade=?,major=?,bio=? WHERE id=?",
-            input.nickname().trim(), input.birthday(), student ? grade : null, student ? clean(input.major()) : null, clean(input.bio()), id);
+        if(student)users.jdbc().update("UPDATE student_user SET nickname=?,birthday=?,grade=?,major=?,bio=? WHERE id=?",input.nickname().trim(),input.birthday(),grade,clean(input.major()),clean(input.bio()),id);
+        else users.jdbc().update("UPDATE publisher_user SET nickname=?,birthday=?,bio=? WHERE id=?",input.nickname().trim(),input.birthday(),clean(input.bio()),id);
     }
     @Transactional
     public void avatar(String id, MultipartFile file) {
@@ -60,18 +61,19 @@ public class ProfileService {
         } catch (ResponseStatusException e) { throw e; }
         catch (Exception e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"无法读取图片，请使用PNG或JPEG文件"); }
         // Serialize replacements per user; image bytes are re-encoded with metadata removed.
-        users.jdbc().queryForMap("SELECT id FROM app_user WHERE id=? FOR UPDATE",id);
+        users.lockById(id);
         users.jdbc().update("DELETE FROM user_avatar WHERE user_id=?",id);
         users.jdbc().update("INSERT INTO user_avatar(user_id,image_data) VALUES(?,?)",id,result);
-        users.jdbc().update("UPDATE app_user SET avatar_version=? WHERE id=?",UUID.randomUUID().toString(),id);
+        users.jdbc().update("UPDATE "+users.tableForId(id)+" SET avatar_version=? WHERE id=?",UUID.randomUUID().toString(),id);
     }
     public Map<String,Object> homepage(String id) {
-        var rows=users.jdbc().queryForList("SELECT id,role,nickname,bio,grade,major,school,organization,verification_status,avatar_version,created_at FROM app_user WHERE id=?",id);
-        if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"用户不存在");
-        var profile=rows.get(0);
+        var account=users.findAccountById(id);
+        if(account==null)throw new ResponseStatusException(HttpStatus.NOT_FOUND,"用户不存在");
+        var source=account.toMap();Map<String,Object> profile=new LinkedHashMap<>();
+        for(String field:List.of("id","role","nickname","bio","grade","major","organization","verification_status","avatar_version","created_at"))profile.put(field,source.get(field));
         profile.put("display_name",displayName(profile)); profile.put("avatar_url",avatarUrl(profile));
         // Organization/school are visible only after verified, never disclose submitted unreviewed identity data.
-        if (!"APPROVED".equals(profile.get("verification_status"))) { profile.put("school",null);profile.put("organization",null); }
+        if (!"APPROVED".equals(profile.get("verification_status"))) profile.put("organization",null);
         profile.remove("avatar_version");
         return profile;
     }
@@ -81,15 +83,15 @@ public class ProfileService {
         String id=user.get("id").toString();
         Long count=users.jdbc().queryForObject(publisher?"SELECT COUNT(*) FROM job WHERE publisher_id=?":"SELECT COUNT(*) FROM job_application WHERE student_id=?",Long.class,id);
         var rows=publisher ? users.jdbc().queryForList("SELECT j.*, (SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id) AS application_count FROM job j WHERE publisher_id=? ORDER BY created_at DESC,id DESC LIMIT 20 OFFSET ?",id,page*20)
-            : users.jdbc().queryForList("SELECT a.id AS application_id,a.created_at AS accepted_at,j.id,j.title,j.location,j.pay,j.publisher_id,u.organization,p.amount_cents AS paid_cents,p.created_at AS paid_at FROM job_application a JOIN job j ON j.id=a.job_id JOIN app_user u ON u.id=j.publisher_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.student_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",id,page*20);
+            : users.jdbc().queryForList("SELECT a.id AS application_id,a.created_at AS accepted_at,j.id,j.title,j.location,j.pay,j.pay_unit,j.publisher_id,u.organization,p.amount_cents AS paid_cents,p.created_at AS paid_at FROM job_application a JOIN job j ON j.id=a.job_id JOIN publisher_user u ON u.id=j.publisher_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.student_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",id,page*20);
         return Map.of("items",rows,"total",count,"page",page);
     }
     public Map<String,Object> applicants(String publisherId,String jobId,int page) {
         if (page<0 || page>10000) bad("页码无效");
         var jobs=users.jdbc().queryForList("SELECT * FROM job WHERE id=? AND publisher_id=?",jobId,publisherId);
         if(jobs.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"岗位不存在或无权查看");
-        var rows=users.jdbc().queryForList("SELECT a.id AS application_id,a.created_at AS accepted_at,u.id,u.role,u.nickname,u.avatar_version,u.grade,u.major,p.amount_cents AS paid_cents FROM job_application a JOIN app_user u ON u.id=a.student_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.job_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",jobId,page*20);
-        for(var row:rows){row.put("display_name",displayName(row));row.put("avatar_url",avatarUrl(row));row.remove("avatar_version");}
+        var rows=users.jdbc().queryForList("SELECT a.id AS application_id,a.created_at AS accepted_at,u.id,u.role,u.nickname,u.avatar_version,u.grade,u.major,u.school,u.name_cipher,u.student_number_cipher,p.amount_cents AS paid_cents FROM job_application a JOIN student_user u ON u.id=a.student_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.job_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",jobId,page*20);
+        for(var row:rows){row.put("display_name",displayName(row));row.put("avatar_url",avatarUrl(row));row.remove("avatar_version");Object name=row.remove("name_cipher"),number=row.remove("student_number_cipher");row.put("real_name",name==null?null:crypto.decrypt(name.toString()));row.put("student_number",number==null?null:crypto.decrypt(number.toString()));}
         return Map.of("job",jobs.get(0),"items",rows,"total",users.jdbc().queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=?",Long.class,jobId),"page",page);
     }
     private String clean(String input){return input==null || input.isBlank()?null:input.trim();}

@@ -24,12 +24,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProfileWalletIntegrationTest {
     @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired JdbcTemplate jdbc;
     @Autowired Crypto crypto; @Autowired ExpiringStore store;
+    @Autowired UserRepository users;
+    @Autowired JobService jobService;
     String publisher,student,other; Cookie pubCookie,stuCookie,otherCookie;
     @BeforeEach void fixtures() {
         publisher=create("PUBLISHER");student=create("STUDENT");other=create("PUBLISHER");
         pubCookie=session(publisher);stuCookie=session(student);otherCookie=session(other);
     }
-    String create(String role){String id=UUID.randomUUID().toString();jdbc.update("INSERT INTO app_user(id,role,account_hash,phone_cipher,password_hash,verification_status,can_publish,can_accept) VALUES(?,?,?,?,?,'APPROVED',?,?)",id,role,crypto.hash(id),crypto.encrypt("13911112222"),"unused-fixture-password",role.equals("PUBLISHER")?1:0,role.equals("STUDENT")?1:0);jdbc.update("INSERT INTO wallet(user_id) VALUES(?)",id);return id;}
+    String create(String role){String id=UUID.randomUUID().toString();users.create(id,role,crypto.hash(id),crypto.encrypt("13911112222"),"unused-fixture-password");jdbc.update("UPDATE "+users.tableForId(id)+" SET verification_status='APPROVED',"+(role.equals("PUBLISHER")?"can_publish":"can_accept")+"=1 WHERE id=?",id);jdbc.update("INSERT INTO wallet(user_id) VALUES(?)",id);return id;}
     Cookie session(String id){String token=UUID.randomUUID().toString();store.put("session:"+crypto.hash(token),id,Duration.ofHours(1));return new Cookie("CAMPUS_SESSION",token);}
     JsonNode postJson(String path,Object input,Cookie cookie,int expected)throws Exception{return body(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api"+path).cookie(cookie).header("X-Requested-With","campus-web").contentType("application/json").content(json.writeValueAsBytes(input))).andExpect(status().is(expected)).andReturn());}
     JsonNode getJson(String path,Cookie cookie,int expected)throws Exception{return body(mvc.perform(get("/api"+path).cookie(cookie)).andExpect(status().is(expected)).andReturn());}
@@ -37,9 +39,45 @@ class ProfileWalletIntegrationTest {
     Map<String,String> amount(String value){return Map.of("amount",value,"requestKey",UUID.randomUUID().toString());}
     long balance(String id){return jdbc.queryForObject("SELECT balance_cents FROM wallet WHERE user_id=?",Long.class,id);}
     String application()throws Exception {
-        String job=postJson("/jobs",Map.of("title","测试兼职","description","岗位说明","location","大学城","pay",150),pubCookie,200).get("id").asText();
+        String job=postJson("/jobs",Map.of("title","测试兼职","description","岗位说明","location","大学城","pay",150,"category","校园服务","requiredCount",2,"requirements","认真负责","startsAt","2099-01-01T09:00:00","durationMinutes",240),pubCookie,200).get("id").asText();
         postJson("/jobs/"+job+"/apply",Map.of(),stuCookie,200);
         return jdbc.queryForObject("SELECT id FROM job_application WHERE job_id=? AND student_id=?",String.class,job,student);
+    }
+    Map<String,Object> vacancy(int count){return new HashMap<>(Map.of("title","校园活动协助","category","活动执行","requiredCount",count,"description","现场签到引导","requirements","准时到场","location","大学生活动中心","pay","180.50","startsAt","2099-05-06T09:00:00","durationMinutes",240));}
+    @Test void jobDetailsProtectIdentityAndExposeOnlySummaryInList()throws Exception {
+        jdbc.update("UPDATE student_user SET nickname='小星',name_cipher=?,student_number_cipher=?,school='测试大学' WHERE id=?",crypto.encrypt("张同学"),crypto.encrypt("S2026001"),student);
+        String id=postJson("/jobs",vacancy(2),pubCookie,200).get("id").asText();
+        JsonNode before=getJson("/jobs/"+id,stuCookie,200);assertEquals("UNACCEPTED",before.get("acceptance_status").asText());assertEquals(2,before.get("remaining").asInt());assertEquals(0,new java.math.BigDecimal("180.50").compareTo(before.get("pay").decimalValue()));
+        postJson("/jobs/"+id+"/apply",Map.of(),stuCookie,200);
+        JsonNode detail=getJson("/jobs/"+id,stuCookie,200);
+        assertEquals("ACCEPTED",detail.get("acceptance_status").asText());assertEquals(1,detail.get("remaining").asInt());assertTrue(detail.get("applied").asBoolean());
+        assertEquals("小星",detail.at("/participants/0/display_name").asText());
+        for(String field:List.of("real_name","student_number","school","phone_cipher","name_cipher","student_number_cipher"))assertFalse(detail.at("/participants/0").has(field),field);
+        JsonNode owner=getJson("/jobs/"+id+"/applicants",pubCookie,200);
+        assertEquals("张同学",owner.at("/items/0/real_name").asText());assertEquals("S2026001",owner.at("/items/0/student_number").asText());assertEquals("测试大学",owner.at("/items/0/school").asText());
+        getJson("/jobs/"+id+"/applicants",otherCookie,404);getJson("/jobs/"+id+"/applicants",stuCookie,404);
+        assertFalse(getJson("/users/"+student,otherCookie,200).has("school"));
+        for(JsonNode card:getJson("/jobs",stuCookie,200))for(String field:List.of("description","requirements","pay","location","participants"))assertFalse(card.has(field),field);
+        postJson("/jobs/"+id+"/apply",Map.of(),stuCookie,409);
+    }
+    @Test void concurrentJoinNeverOverbooksLastSeat()throws Exception {
+        String id=postJson("/jobs",vacancy(1),pubCookie,200).get("id").asText();
+        var contenders=new ArrayList<Map<String,Object>>();for(int i=0;i<8;i++)contenders.add(users.byId(create("STUDENT")));
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(8);var gate=new java.util.concurrent.CountDownLatch(1);
+        try {
+            var futures=new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for(var contender:contenders)futures.add(executor.submit(()->{gate.await();try{jobService.apply(id,contender);return true;}catch(org.springframework.web.server.ResponseStatusException e){assertEquals(409,e.getStatusCode().value());return false;}}));
+            gate.countDown();int joined=0;for(var f:futures)if(f.get(15,java.util.concurrent.TimeUnit.SECONDS))joined++;
+            assertEquals(1,joined);assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=?",Integer.class,id));
+            assertEquals(0,getJson("/jobs/"+id,stuCookie,200).get("remaining").asInt());
+        } finally {executor.shutdownNow();}
+    }
+    @Test void jobValidationAndStartedJobCannotBeJoined()throws Exception {
+        for(var invalid:List.of(Map.of("requiredCount",0),Map.of("requiredCount",201),Map.of("durationMinutes",0),Map.of("pay","10.001"),Map.of("startsAt","2000-01-01T09:00:00"),Map.of("requirements"," "))){var form=vacancy(1);form.putAll(invalid);postJson("/jobs",form,pubCookie,400);}
+        String id=postJson("/jobs",vacancy(1),pubCookie,200).get("id").asText();jdbc.update("UPDATE job SET starts_at='2000-01-01 09:00:00' WHERE id=?",id);
+        postJson("/jobs/"+id+"/apply",Map.of(),stuCookie,409);
+        getJson("/jobs/not-found",stuCookie,404);
+        mvc.perform(get("/api/jobs/"+id)).andExpect(status().isUnauthorized());
     }
     @Test void profileEditingAndHomepagePrivacy()throws Exception {
         Map<String,Object> form=Map.of("nickname","小禾","birthday","2003-05-20","grade","大三","major","计算机","bio","热爱摄影");

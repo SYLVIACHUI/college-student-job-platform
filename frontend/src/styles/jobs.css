@@ -1,0 +1,137 @@
+.vacancy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.vacancy-card .outline-tag {
+  align-self: flex-start;
+}
+.job-title-link {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+.job-title-link:hover {
+  color: var(--primary, #267c58);
+}
+.vacancy-summary,
+.job-facts {
+  margin: 12px 0;
+}
+.vacancy-summary > div {
+  display: flex;
+  gap: 12px;
+  margin: 8px 0;
+}
+.vacancy-summary dt,
+.job-facts dt {
+  color: #758078;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.vacancy-summary dd,
+.job-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.vacancy-card .job-bottom {
+  margin-top: auto;
+}
+.job-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  padding: 24px;
+  background: #f6f8f5;
+  border-radius: 16px;
+}
+.job-facts dd {
+  margin-top: 8px;
+}
+.job-prose {
+  white-space: pre-wrap;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+  margin-bottom: 28px;
+}
+.participant-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.participant-slot {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 9px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  min-width: 0;
+}
+.participant-slot > span:last-child {
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vacant-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px dashed #aac5b6;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  color: #3d8361;
+}
+.participant-slot:not(:disabled):hover .vacant-circle {
+  background: #eaf4ec;
+  border-color: #3d8361;
+}
+.participant-slot:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.job-publish-form {
+  display: grid;
+  gap: 12px;
+}
+.job-publish-form select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #dce2dc;
+  border-radius: 10px;
+  background: white;
+  font: inherit;
+}
+.private-identity {
+  font-size: 13px;
+  color: #56655b;
+  line-height: 1.8;
+}
+.job-detail h2 {
+  margin: 16px 0;
+}
+.job-detail > .primary {
+  margin-top: 20px;
+}
+@media (max-width: 640px) {
+  .job-facts {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+  .participant-slots {
+    grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  }
+  .job-publish-form .field-grid {
+    grid-template-columns: 1fr;
+  }
+}
