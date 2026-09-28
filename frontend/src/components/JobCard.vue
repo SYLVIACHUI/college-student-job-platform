@@ -1,6 +1,6 @@
 <script setup>
 import { jobTime, jobDuration } from "../jobFormat";
-defineProps({ job: Object });
+defineProps({ job: Object, showCompany: { type: Boolean, default: true } });
 const emit = defineEmits(["open", "home"]);
 </script>
 <template>
@@ -11,7 +11,7 @@ const emit = defineEmits(["open", "home"]);
         {{ job.title }}
       </button>
     </h3>
-    <button class="user-home-trigger" @click="emit('home', job.publisher_id)">
+    <button v-if="showCompany" class="user-home-trigger" @click="emit('home', job.publisher_id)">
       {{ job.organization || "企业主页" }} ↗
     </button>
     <dl class="vacancy-summary">

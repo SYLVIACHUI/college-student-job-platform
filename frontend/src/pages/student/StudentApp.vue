@@ -27,6 +27,7 @@ import WalletPage from "../../views/WalletPage.vue";
 import UserAvatar from "../../components/UserAvatar.vue";
 import { usePortal } from "../../composables/usePortal";
 const {
+  backDetail,
   openJob,
   jobReturn,
   user,
@@ -411,17 +412,18 @@ const {
             :job-id="selectedJobId"
             :user="user"
             :can-act="canAct"
-            @back="navigate(jobReturn)"
+            @back="backDetail"
             @home="openUser"
             @verify="navigate('verify')"
             @joined="run(refresh)"
             @expired="sessionExpired"
           />
           <UserHome
+            @detail="openJob"
             v-else-if="page === 'userHome'"
             :user-id="profileUserId"
             :own-id="user.id"
-            @back="navigate(homeReturn)"
+            @back="backDetail"
             @edit="navigate('profile')"
             @expired="sessionExpired"
           />

@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { api } from '../api'
+import CompanyEditor from '../components/CompanyEditor.vue'
 import UserAvatar from '../components/UserAvatar.vue'
 const props = defineProps({ user: Object })
 const emit = defineEmits(['updated', 'home', 'history', 'wallet', 'expired'])
@@ -14,7 +15,7 @@ function upload(event) { const file=event.target.files[0];event.target.value='';
 <template>
   <div class="personal-grid">
     <section class="panel personal-card">
-      <div class="section-title"><div><h2>个人资料</h2><p>让与你相遇的人，更了解你一点。</p></div><button class="secondary" @click="emit('home',user.id)">预览我的主页 ↗</button></div>
+      <div class="section-title"><div><h2>个人资料</h2><p>让与你相遇的人，更了解你一点。</p></div><button class="secondary" @click="emit('home',user.id)">{{user.role==='PUBLISHER'?'预览企业主页':'预览我的主页'}} ↗</button></div>
       <p v-if="error" class="alert error" role="alert">{{ error }}</p><p v-if="success" class="alert success" role="status">{{ success }}</p>
       <div class="avatar-editor"><UserAvatar :src="user.avatar_url" :name="user.display_name" :size="84" /><div><label class="secondary upload-label">{{ busy ? '处理中…' : '更换头像' }}<input type="file" accept="image/png,image/jpeg" :disabled="busy" @change="upload" /></label><p>JPG / PNG · 最大2MB · 自动裁剪为方形</p></div></div>
       <form @submit.prevent="save">
@@ -27,8 +28,9 @@ function upload(event) { const file=event.target.files[0];event.target.value='';
       </form>
     </section>
     <aside class="profile-aside">
-      <section class="panel personal-card"><span class="card-kicker">MY SPACE</span><h3>{{ user.display_name }}</h3><p class="muted">{{ user.account }}</p><div class="profile-shortcuts"><button @click="emit('history')"><span>{{ user.role==='STUDENT'?'兼职接取历史':'岗位发布记录' }}</span><span>→</span></button><button @click="emit('wallet')"><span>{{ user.role==='STUDENT'?'我的钱包':'企业结算钱包' }}</span><span>→</span></button><button @click="emit('home',user.id)"><span>我的个人主页</span><span>→</span></button></div></section>
+      <section class="panel personal-card"><span class="card-kicker">MY SPACE</span><h3>{{ user.display_name }}</h3><p class="muted">{{ user.account }}</p><div class="profile-shortcuts"><button @click="emit('history')"><span>{{ user.role==='STUDENT'?'兼职接取历史':'岗位发布记录' }}</span><span>→</span></button><button @click="emit('wallet')"><span>{{ user.role==='STUDENT'?'我的钱包':'企业结算钱包' }}</span><span>→</span></button><button @click="emit('home',user.id)"><span>{{user.role==='PUBLISHER'?'企业主页':'我的个人主页'}}</span><span>→</span></button></div></section>
       <section class="panel personal-card"><h3>资料与实名认证</h3><p class="profile-note">昵称与简介可自由更新。真实姓名、单位和学校来自实名认证资料，不在此处修改。</p></section>
     </aside>
+    <CompanyEditor v-if="user.role==='PUBLISHER'" :user-id="user.id" @home="emit('home',$event)" @expired="emit('expired')"/>
   </div>
 </template>

@@ -6,3 +6,6 @@
 .tools/
 data/
 .idea/
+deploy/nginx/logs/
+deploy/nginx/temp/
+deploy/nginx/runtime-mime.types

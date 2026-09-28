@@ -29,6 +29,7 @@ import WalletPage from "../../views/WalletPage.vue";
 import UserAvatar from "../../components/UserAvatar.vue";
 import { usePortal } from "../../composables/usePortal";
 const {
+  backDetail,
   openJob,
   jobReturn,
   user,
@@ -84,6 +85,7 @@ const {
       >
       <div class="workspace-label">企业工作空间</div>
       <nav>
+        <button v-if="user" :class="{active:page==='userHome' && profileUserId===user.id}" @click="openUser(user.id)"><Building2 :size="19"/>企业主页</button>
         <button
           v-if="user"
           :class="{ active: page === 'profile' }"
@@ -418,7 +420,7 @@ const {
             :job-id="selectedJobId"
             :user="user"
             :can-act="canAct"
-            @back="navigate(jobReturn)"
+            @back="backDetail"
             @home="openUser"
             @verify="navigate('verify')"
             @applicants="openApplicants"
@@ -426,10 +428,11 @@ const {
             @expired="sessionExpired"
           />
           <UserHome
+            @detail="openJob"
             v-else-if="page === 'userHome'"
             :user-id="profileUserId"
             :own-id="user.id"
-            @back="navigate(homeReturn)"
+            @back="backDetail"
             @edit="navigate('profile')"
             @expired="sessionExpired"
           />

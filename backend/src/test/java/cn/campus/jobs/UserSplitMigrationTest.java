@@ -12,13 +12,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class UserSplitMigrationTest {
     @Test void jobUpgradeKeepsLegacyParticipantsAndDailyPay() {
         var ds=new DriverManagerDataSource("jdbc:h2:mem:job_upgrade;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
-        Flyway.configure().dataSource(ds).target("4").load().migrate();
+        Flyway.configure().dataSource(ds).locations("classpath:db/legacy-migration","classpath:db/common-migration").javaMigrations(new db.migration.V2__Ensure_transactional_tables(),new db.migration.V4__Split_publisher_and_student_users()).target("4").load().migrate();
         var db=new JdbcTemplate(ds);var users=new UserRepository(db,new PublisherUserRepository(db),new StudentUserRepository(db));
         users.create("company","PUBLISHER","company-hash","cipher","hash");
         for(String id:List.of("one","two"))users.create(id,"STUDENT",id,"cipher","hash");
         db.update("INSERT INTO job(id,publisher_id,title,description,location,pay) VALUES('legacy','company','旧岗位','原工作内容','校内',150)");
         for(String id:List.of("one","two"))db.update("INSERT INTO job_application(id,job_id,student_id) VALUES(?,'legacy',?)",id,id);
-        Flyway.configure().dataSource(ds).load().migrate();
+        Flyway.configure().dataSource(ds).locations("classpath:db/legacy-migration","classpath:db/common-migration").javaMigrations(new db.migration.V2__Ensure_transactional_tables(),new db.migration.V4__Split_publisher_and_student_users()).load().migrate();
         var job=db.queryForMap("SELECT * FROM job WHERE id='legacy'");
         assertEquals(2,((Number)job.get("required_count")).intValue());assertEquals("DAY",job.get("pay_unit"));
         assertNull(job.get("starts_at"));assertNull(job.get("duration_minutes"));
@@ -27,7 +27,7 @@ class UserSplitMigrationTest {
     }
     @Test void upgradePreservesAccountsAndRelatedRecords() {
         var ds=new DriverManagerDataSource("jdbc:h2:mem:split_upgrade;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
-        Flyway.configure().dataSource(ds).target("3").load().migrate();
+        Flyway.configure().dataSource(ds).locations("classpath:db/legacy-migration","classpath:db/common-migration").javaMigrations(new db.migration.V2__Ensure_transactional_tables(),new db.migration.V4__Split_publisher_and_student_users()).target("3").load().migrate();
         var db=new JdbcTemplate(ds);
         for(String role:List.of("PUBLISHER","STUDENT")) {
             db.update("INSERT INTO app_user(id,role,account_hash,phone_cipher,password_hash,name_cipher,nickname,birthday,verification_status,can_publish,can_accept,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -46,7 +46,7 @@ class UserSplitMigrationTest {
         db.update("INSERT INTO withdrawal(id,user_id,amount_cents) VALUES('withdrawal','STUDENT',500)");
         var before=db.queryForList("SELECT * FROM app_user ORDER BY id");
 
-        Flyway.configure().dataSource(ds).load().migrate();
+        Flyway.configure().dataSource(ds).locations("classpath:db/legacy-migration","classpath:db/common-migration").javaMigrations(new db.migration.V2__Ensure_transactional_tables(),new db.migration.V4__Split_publisher_and_student_users()).load().migrate();
         assertEquals(before,db.queryForList("SELECT * FROM app_user_legacy_v3 ORDER BY id"));
         for(String table:List.of("publisher_user","student_user")) {
             var migrated=db.queryForMap("SELECT * FROM "+table);

@@ -66,7 +66,19 @@ export function usePortal(roleName) {
     selectedJobId = ref(""),
     homeReturn = ref("profile");
   const jobReturn = ref("home");
+  const detailHistory = [];
+  function rememberPage() {
+    detailHistory.push({page:page.value, profileUserId:profileUserId.value, selectedJobId:selectedJobId.value});
+  }
+  function backDetail() {
+    const previous=detailHistory.pop();
+    if(!previous){navigate('home');return;}
+    profileUserId.value=previous.profileUserId;
+    selectedJobId.value=previous.selectedJobId;
+    navigate(previous.page);
+  }
   function openJob(id) {
+    rememberPage();
     jobReturn.value = page.value;
     selectedJobId.value = id;
     navigate("jobDetail");
@@ -76,7 +88,7 @@ export function usePortal(roleName) {
       ({
         profile: "个人中心",
         jobDetail: "兼职详情",
-        userHome: "个人主页",
+        userHome: "主页",
         history: publisher.value ? "岗位发布记录" : "兼职接取历史",
         applicants: "岗位接取人",
         wallet: publisher.value ? "企业结算钱包" : "我的钱包",
@@ -86,6 +98,8 @@ export function usePortal(roleName) {
       (publisher.value ? "今天，也有新的可能。" : "发现值得出发的机会。"),
   );
   function openUser(id) {
+    if(page.value==='userHome' && profileUserId.value===id)return;
+    rememberPage();
     homeReturn.value = page.value;
     profileUserId.value = id;
     navigate("userHome");
@@ -129,6 +143,7 @@ export function usePortal(roleName) {
     jobs.value = await api("/jobs");
   }
   function clearDrafts() {
+    detailHistory.length=0;
     Object.keys(verifyForm).forEach((k) => (verifyForm[k] = ""));
     Object.assign(jobForm, {
       category: "",
@@ -219,6 +234,7 @@ export function usePortal(roleName) {
     });
   }
   function navigate(next) {
+    if(next!=='userHome' && next!=='jobDetail')detailHistory.length=0;
     page.value = next;
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (next === "verify")
@@ -302,6 +318,7 @@ export function usePortal(roleName) {
   });
 
   return {
+    backDetail,
     openJob,
     jobReturn,
     user,

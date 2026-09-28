@@ -44,6 +44,47 @@ class ProfileWalletIntegrationTest {
         return jdbc.queryForObject("SELECT id FROM job_application WHERE job_id=? AND student_id=?",String.class,job,student);
     }
     Map<String,Object> vacancy(int count){return new HashMap<>(Map.of("title","校园活动协助","category","活动执行","requiredCount",count,"description","现场签到引导","requirements","准时到场","location","大学生活动中心","pay","180.50","startsAt","2099-05-06T09:00:00","durationMinutes",240));}
+    @Test void companyHomepageScopesJobsAndProtectsRecruiterIdentity()throws Exception {
+        jdbc.update("UPDATE publisher_user SET organization='测试企业',nickname='招聘小禾',name_cipher=?,identity_cipher=? WHERE id=?",crypto.encrypt("保密姓名"),crypto.encrypt("保密证件"),publisher);
+        mvc.perform(put("/api/me/company").cookie(pubCookie).header("X-Requested-With","campus-web").contentType("application/json").content("{\"introduction\":\"欢迎了解我们的团队\"}"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.introduction").value("欢迎了解我们的团队"));
+        String current=postJson("/jobs",vacancy(1),pubCookie,200).get("id").asText();
+        String past=postJson("/jobs",vacancy(2),pubCookie,200).get("id").asText();
+        jdbc.update("UPDATE job SET starts_at='2000-01-01 09:00:00' WHERE id=?",past);
+        postJson("/jobs",vacancy(2),otherCookie,200);
+        postJson("/jobs/"+current+"/apply",Map.of(),stuCookie,200);
+        var home=getJson("/companies/"+publisher,stuCookie,200);
+        assertEquals("测试企业",home.get("name").asText());assertNotNull(home.get("joined_at"));
+        assertEquals(publisher,home.at("/recruiters/0/id").asText());assertEquals("招聘小禾",home.at("/recruiters/0/display_name").asText());
+        for(String field:List.of("birthday","phone","account","email","password_hash","name_cipher","identity_cipher"))assertFalse(home.at("/recruiters/0").has(field),field);
+        var list=getJson("/companies/"+publisher+"/jobs",stuCookie,200);
+        assertEquals(1,list.get("total").asInt());assertEquals(current,list.at("/items/0/id").asText());assertEquals(0,list.at("/items/0/remaining").asInt());
+        assertFalse(list.at("/items/0").has("description"));
+        assertEquals(0,getJson("/companies/"+publisher+"/jobs?page=1",stuCookie,200).get("items").size());
+        getJson("/companies/"+publisher+"/jobs?page=-1",stuCookie,400);
+        getJson("/companies/"+student,stuCookie,404);
+        mvc.perform(get("/api/companies/"+publisher)).andExpect(status().isUnauthorized());
+        mvc.perform(put("/api/me/company").cookie(stuCookie).header("X-Requested-With","campus-web").contentType("application/json").content("{\"introduction\":\"不能修改\"}")).andExpect(status().isForbidden());
+        mvc.perform(put("/api/me/company").cookie(pubCookie).header("X-Requested-With","campus-web").contentType("application/json").content(json.writeValueAsBytes(Map.of("introduction","长".repeat(2001))))).andExpect(status().isBadRequest());
+        jdbc.update("UPDATE publisher_user SET verification_status='PENDING' WHERE id=?",publisher);
+        assertTrue(getJson("/companies/"+publisher,stuCookie,200).get("name").isNull());
+    }
+    @Test void companyPhotosAreBoundedReencodedAndOwnerScoped()throws Exception {
+        var bytes=new ByteArrayOutputStream();ImageIO.write(new BufferedImage(80,40,BufferedImage.TYPE_INT_RGB),"png",bytes);
+        var file=new MockMultipartFile("file","office.png","image/png",bytes.toByteArray());
+        for(int i=0;i<6;i++)mvc.perform(multipart("/api/me/company/photos").file(file).cookie(pubCookie).header("X-Requested-With","campus-web")).andExpect(status().isOk());
+        mvc.perform(multipart("/api/me/company/photos").file(file).cookie(pubCookie).header("X-Requested-With","campus-web")).andExpect(status().isConflict());
+        mvc.perform(multipart("/api/me/company/photos").file(file).cookie(stuCookie).header("X-Requested-With","campus-web")).andExpect(status().isForbidden());
+        var photo=getJson("/companies/"+publisher,stuCookie,200).at("/photos/0");String id=photo.get("id").asText();String url=photo.get("url").asText();
+        var data=mvc.perform(get(url).cookie(stuCookie)).andExpect(status().isOk()).andExpect(content().contentType("image/jpeg")).andReturn().getResponse().getContentAsByteArray();
+        var decoded=ImageIO.read(new java.io.ByteArrayInputStream(data));assertEquals(80,decoded.getWidth());assertEquals(40,decoded.getHeight());
+        mvc.perform(get(url)).andExpect(status().isUnauthorized());
+        mvc.perform(delete("/api/me/company/photos/"+id).cookie(otherCookie).header("X-Requested-With","campus-web")).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/me/company/photos/"+id).cookie(pubCookie).header("X-Requested-With","campus-web")).andExpect(status().isOk());
+        mvc.perform(get(url).cookie(stuCookie)).andExpect(status().isNotFound());
+        mvc.perform(multipart("/api/me/company/photos").file(new MockMultipartFile("file","bad.png","image/png","invalid".getBytes())).cookie(pubCookie).header("X-Requested-With","campus-web")).andExpect(status().isBadRequest());
+        mvc.perform(multipart("/api/me/company/photos").file(new MockMultipartFile("file","big.png","image/png",new byte[2*1024*1024+1])).cookie(pubCookie).header("X-Requested-With","campus-web")).andExpect(status().isBadRequest());
+    }
     @Test void jobDetailsProtectIdentityAndExposeOnlySummaryInList()throws Exception {
         jdbc.update("UPDATE student_user SET nickname='小星',name_cipher=?,student_number_cipher=?,school='测试大学' WHERE id=?",crypto.encrypt("张同学"),crypto.encrypt("S2026001"),student);
         String id=postJson("/jobs",vacancy(2),pubCookie,200).get("id").asText();

@@ -12,6 +12,14 @@ public class JobService {
     public JobService(UserRepository users) { this.users=users; }
     private static final String COUNTS="(SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id)";
     private static final String SUMMARY="j.id,j.publisher_id,j.title,j.category,j.required_count,j.starts_at,j.duration_minutes,u.organization,"+COUNTS+" AS applications,j.required_count-"+COUNTS+" AS remaining,CASE WHEN "+COUNTS+">0 THEN 'ACCEPTED' ELSE 'UNACCEPTED' END AS acceptance_status";
+    public Map<String,Object> companyJobs(String publisherId,int page){
+        if(page<0 || page>10000)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"页码无效");
+        var now=java.time.LocalDateTime.now();
+        String condition=" WHERE j.publisher_id=? AND j.starts_at>?";
+        var items=users.jdbc().queryForList("SELECT "+SUMMARY+" FROM job j JOIN publisher_user u ON u.id=j.publisher_id"+condition+" ORDER BY j.created_at DESC,j.id DESC LIMIT 12 OFFSET ?",publisherId,now,page*12);
+        Long total=users.jdbc().queryForObject("SELECT COUNT(*) FROM job j"+condition,Long.class,publisherId,now);
+        return Map.of("items",items,"total",total,"page",page);
+    }
     public List<Map<String,Object>> list(Map<String,Object> viewer) {
         String condition="PUBLISHER".equals(viewer.get("role"))?" WHERE j.publisher_id=?":"";
         var args=new ArrayList<Object>();args.add(viewer.get("id"));if(!condition.isEmpty())args.add(viewer.get("id"));

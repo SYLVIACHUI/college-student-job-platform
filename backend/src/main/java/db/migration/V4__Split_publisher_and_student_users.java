@@ -10,6 +10,12 @@ public class V4__Split_publisher_and_student_users extends BaseJavaMigration {
     private static final String COMMON="id,role,account_hash,phone_cipher,password_hash,email,nickname,birthday,bio,avatar_version,verification_status,review_note,review_id,last_login_at,created_at";
     @Override public void migrate(Context context)throws Exception {
         Connection c=context.getConnection();boolean mysql="MySQL".equalsIgnoreCase(c.getMetaData().getDatabaseProductName());String engine=mysql?" ENGINE=InnoDB":"";
+        try(var tables=c.getMetaData().getTables(c.getCatalog(),mysql?null:c.getSchema(),"app_user",new String[]{"TABLE"})){
+            if(!tables.next()){
+                // New V1 already creates the role tables. Never recreate or copy them.
+                count(c,"SELECT COUNT(*) FROM publisher_user");count(c,"SELECT COUNT(*) FROM student_user");return;
+            }
+        }
         execute(c,"CREATE TABLE account_identity (id VARCHAR(36) PRIMARY KEY,role VARCHAR(16) NOT NULL,UNIQUE(id,role))"+engine);
         execute(c,"INSERT INTO account_identity(id,role) SELECT id,role FROM app_user");
         String common="id VARCHAR(36) PRIMARY KEY,role VARCHAR(16) NOT NULL DEFAULT '%s',account_hash VARCHAR(64) NOT NULL UNIQUE,phone_cipher VARCHAR(512) NOT NULL,password_hash VARCHAR(100) NOT NULL,email VARCHAR(254),nickname VARCHAR(40),birthday DATE,bio VARCHAR(300),avatar_version VARCHAR(36),verification_status VARCHAR(16) NOT NULL DEFAULT 'UNVERIFIED',review_note VARCHAR(500),review_id VARCHAR(36),last_login_at TIMESTAMP NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,";

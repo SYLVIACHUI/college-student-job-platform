@@ -1,0 +1,7 @@
+发布端账号 密码
+13800009001  CampusPub2026!
+学生端账号 密码
+13800009002  CampusStu2026!
+审核人账号 密码
+reviewadmin  Review2026!Q7m4
+审核端口 8088/admin

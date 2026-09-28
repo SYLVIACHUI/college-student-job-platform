@@ -1,5 +1,7 @@
 # 青禾校园兼职平台
 
+前端支持 Nginx 部署：在项目根目录运行 `./scripts/frontend-nginx.ps1`，访问 `http://localhost:8088/publisher`、`/student` 或 `/admin`，后端仍在 IDEA 中运行于 8080。详细说明见 [Nginx 前端部署](docs/Nginx前端部署.md)。
+
 新增个人中心、用户主页、双端历史、岗位接取名单及模拟钱包，使用方式见 [个人中心与钱包](docs/个人中心与钱包.md)。继续使用当前 MySQL/Redis 配置，重启后端自动迁移数据库。模拟充值、发放和提现不涉及真实资金。
 
 第一阶段实现：两类用户、手机号注册登录、实名认证提交/状态流转、发布/领取权限控制，以及一个可验证双端联动的基础岗位流程。
@@ -11,7 +13,7 @@
 - 正式配置：MySQL + Redis；Flyway 自动迁移。
 - 显式 `dev` 配置：H2 文件库 + 内存验证码/会话，免数据库安装进行本地演示。
 - `backend/src/main/java/cn/campus/jobs`：接口、认证服务、认证审核状态机、加密、持久化与缓存适配器。
-- `backend/src/main/resources/db/migration`：数据库版本迁移。
+- `backend/src/main/resources/db/migration`：新库初始化，企业与学生直接分表；`db/legacy-migration` 保留已运行版本的原始脚本；`db/common-migration` 存放两种数据库共用的后续 SQL。
 - `frontend/src`：双端页面、接口封装与响应式样式。
 - `docs/API.md`：接口与状态说明。
 
