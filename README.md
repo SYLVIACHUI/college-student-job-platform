@@ -4,6 +4,7 @@
 
 ![主界面](https://github.com/SYLVIACHUI/college-student-job-platform/blob/master/img_folder/login.png)
 ![发布界面](https://github.com/SYLVIACHUI/college-student-job-platform/blob/master/img_folder/newjob.gif)
+![领取界面](https://github.com/SYLVIACHUI/college-student-job-platform/blob/master/img_folder/receive.gif)
 
 前端支持 Nginx 部署：在项目根目录运行 `./scripts/frontend-nginx.ps1`，访问 `http://localhost:8088/publisher`、`/student` 或 `/admin`，后端仍在 IDEA 中运行于 8080。详细说明见 [Nginx 前端部署](docs/Nginx前端部署.md)。
 
