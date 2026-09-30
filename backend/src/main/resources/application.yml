@@ -10,12 +10,12 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/campusjobs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: root
-    password: nmx2165427
+    password: root
   data:
     redis:
       host: 127.0.0.1
       port: 6379
-      password: nmx2165427
+      password: root
       database: 0
       timeout: 3s
   jackson:
