@@ -70,4 +70,4 @@ npm run build
 ```
 
 框架参考：[Spring Boot 3.5 系统要求](https://docs.spring.io/spring-boot/3.5/system-requirements.html)、[Vue 官方快速开始](https://vuejs.org/guide/quick-start)。
-项目讲解视频（未更新）可关注B站账号 http://b23.tv/qAlwRbB
+项目讲解视频（未更新）可关注B站账号
