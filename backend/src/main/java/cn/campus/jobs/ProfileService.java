@@ -82,15 +82,15 @@ public class ProfileService {
         boolean publisher="PUBLISHER".equals(user.get("role"));
         String id=user.get("id").toString();
         Long count=users.jdbc().queryForObject(publisher?"SELECT COUNT(*) FROM job WHERE publisher_id=?":"SELECT COUNT(*) FROM job_application WHERE student_id=?",Long.class,id);
-        var rows=publisher ? users.jdbc().queryForList("SELECT j.*, (SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id) AS application_count FROM job j WHERE publisher_id=? ORDER BY created_at DESC,id DESC LIMIT 20 OFFSET ?",id,page*20)
-            : users.jdbc().queryForList("SELECT a.id AS application_id,a.created_at AS accepted_at,j.id,j.title,j.location,j.pay,j.pay_unit,j.publisher_id,u.organization,p.amount_cents AS paid_cents,p.created_at AS paid_at FROM job_application a JOIN job j ON j.id=a.job_id JOIN publisher_user u ON u.id=j.publisher_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.student_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",id,page*20);
+        var rows=publisher ? users.jdbc().queryForList("SELECT j.*, (SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status='ACTIVE') AS application_count FROM job j WHERE publisher_id=? ORDER BY created_at DESC,id DESC LIMIT 20 OFFSET ?",id,page*20)
+            : users.jdbc().queryForList("SELECT a.id AS application_id,a.status AS application_status,a.created_at AS accepted_at,j.status AS job_status,j.id,j.title,j.location,j.pay,j.pay_unit,j.publisher_id,u.organization,p.amount_cents AS paid_cents,p.created_at AS paid_at FROM job_application a JOIN job j ON j.id=a.job_id JOIN publisher_user u ON u.id=j.publisher_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.student_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",id,page*20);
         return Map.of("items",rows,"total",count,"page",page);
     }
     public Map<String,Object> applicants(String publisherId,String jobId,int page) {
         if (page<0 || page>10000) bad("页码无效");
         var jobs=users.jdbc().queryForList("SELECT * FROM job WHERE id=? AND publisher_id=?",jobId,publisherId);
         if(jobs.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"岗位不存在或无权查看");
-        var rows=users.jdbc().queryForList("SELECT a.id AS application_id,a.created_at AS accepted_at,u.id,u.role,u.nickname,u.avatar_version,u.grade,u.major,u.school,u.name_cipher,u.student_number_cipher,p.amount_cents AS paid_cents FROM job_application a JOIN student_user u ON u.id=a.student_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.job_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",jobId,page*20);
+        var rows=users.jdbc().queryForList("SELECT a.id AS application_id,a.status AS application_status,a.created_at AS accepted_at,u.id,u.role,u.nickname,u.avatar_version,u.grade,u.major,u.school,u.name_cipher,u.student_number_cipher,p.amount_cents AS paid_cents FROM job_application a JOIN student_user u ON u.id=a.student_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.job_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET ?",jobId,page*20);
         for(var row:rows){row.put("display_name",displayName(row));row.put("avatar_url",avatarUrl(row));row.remove("avatar_version");Object name=row.remove("name_cipher"),number=row.remove("student_number_cipher");row.put("real_name",name==null?null:crypto.decrypt(name.toString()));row.put("student_number",number==null?null:crypto.decrypt(number.toString()));}
         return Map.of("job",jobs.get(0),"items",rows,"total",users.jdbc().queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=?",Long.class,jobId),"page",page);
     }

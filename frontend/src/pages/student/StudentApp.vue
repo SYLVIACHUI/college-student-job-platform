@@ -23,10 +23,15 @@ import {
 import ProfileCenter from "../../views/ProfileCenter.vue";
 import UserHome from "../../views/UserHome.vue";
 import HistoryPage from "../../views/HistoryPage.vue";
+import NotificationCenter from "../../views/NotificationCenter.vue";
+import { Bell } from "lucide-vue-next";
 import WalletPage from "../../views/WalletPage.vue";
 import UserAvatar from "../../components/UserAvatar.vue";
 import { usePortal } from "../../composables/usePortal";
 const {
+  unreadCount,
+  loadUnread,
+  openNotification,
   backDetail,
   openJob,
   jobReturn,
@@ -140,6 +145,7 @@ const {
           贝鱼校园 <ChevronRight :size="14" /> <span>领取端</span>
         </div>
         <div class="top-actions">
+          <button v-if="user" class="notification-entry" :aria-label="`站内消息，${unreadCount}条未读`" @click="navigate('notifications')"><Bell :size="18"/><span>消息</span><span v-if="unreadCount" class="notification-badge">{{unreadCount>99?'99+':unreadCount}}</span></button>
           <div class="role-switch">
             <button
               :class="{ selected: false }"
@@ -396,8 +402,9 @@ const {
               }}</span
             >
           </div>
+          <NotificationCenter v-if="page === 'notifications'" :key="user.id" @unread="unreadCount=$event" @open="openNotification" @expired="sessionExpired"/>
           <ProfileCenter
-            v-if="page === 'profile'"
+            v-else-if="page === 'profile'"
             :key="user.id"
             :user="user"
             @updated="user = $event"

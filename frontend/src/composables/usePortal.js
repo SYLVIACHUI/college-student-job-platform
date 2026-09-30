@@ -18,6 +18,9 @@ export function usePortal(roleName) {
     cooldown = ref(0),
     jobs = ref([]),
     events = ref([]);
+  const unreadCount=ref(0);
+  async function loadUnread(){const id=user.value?.id;if(!id)return;const data=await api("/notifications/unread-count");if(user.value?.id===id)unreadCount.value=data.unread;}
+  function openNotification(item){if(item.target_type==="JOB")openJob(item.target_id);else navigate(item.target_type==="WALLET"?"wallet":"verify");}
   const authForm = reactive({ phone: "", code: "", password: "" });
   const verifyForm = reactive({
     organization: "",
@@ -86,6 +89,7 @@ export function usePortal(roleName) {
   const pageTitle = computed(
     () =>
       ({
+        notifications: "消息中心",
         profile: "个人中心",
         jobDetail: "兼职详情",
         userHome: "主页",
@@ -144,6 +148,7 @@ export function usePortal(roleName) {
   }
   function clearDrafts() {
     detailHistory.length=0;
+    unreadCount.value=0;
     Object.keys(verifyForm).forEach((k) => (verifyForm[k] = ""));
     Object.assign(jobForm, {
       category: "",
@@ -165,6 +170,7 @@ export function usePortal(roleName) {
   async function refresh() {
     await loadUser();
     await loadJobs();
+    await loadUnread();
     if (page.value === "verify")
       events.value = await api("/verification/events");
   }
@@ -318,6 +324,9 @@ export function usePortal(roleName) {
   });
 
   return {
+    unreadCount,
+    loadUnread,
+    openNotification,
     backDetail,
     openJob,
     jobReturn,

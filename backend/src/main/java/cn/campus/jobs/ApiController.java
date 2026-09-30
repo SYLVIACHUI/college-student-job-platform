@@ -51,6 +51,9 @@ public class ApiController {
         String id=jobs.publish(input,auth.current(req));
         return Map.of("id",id,"message","岗位已发布，学生端可以查看");
     }
+    public record CancelJob(@NotBlank @Size(max=300) String reason) {}
+    @PostMapping("/jobs/{id}/withdraw") public Object withdraw(@PathVariable String id,HttpServletRequest req){jobs.withdraw(id,auth.current(req));return Map.of("message","已退出兼职");}
+    @PostMapping("/jobs/{id}/cancel") public Object cancel(@PathVariable String id,@Valid @RequestBody CancelJob input,HttpServletRequest req){jobs.cancel(id,auth.current(req),input.reason());return Map.of("message","活动已取消");}
     @PostMapping("/jobs/{id}/apply") public Object apply(@PathVariable String id,HttpServletRequest req) {
         jobs.apply(id,auth.current(req));
         return Map.of("message","领取成功");

@@ -11,7 +11,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class VerificationService {
     private final UserRepository users;
     private final Crypto crypto;
-    public VerificationService(UserRepository users, Crypto crypto) { this.users = users; this.crypto = crypto; }
+    private final NotificationService notifications;
+    public VerificationService(UserRepository users, Crypto crypto,NotificationService notifications) { this.users = users; this.crypto = crypto; this.notifications=notifications; }
     @Transactional
     public void submit(String id, ApiController.Verification input) {
         Map<String,Object> user = users.lockById(id);
@@ -38,6 +39,8 @@ public class VerificationService {
         String permission="PUBLISHER".equals(user.get("role"))?"can_publish":"can_accept";
         users.jdbc().update("UPDATE "+users.tableForId(id)+" SET verification_status=?,review_note=?,"+permission+"=? WHERE id=?", status,note,approved?1:0,id);
         users.jdbc().update("INSERT INTO verification_event(id,user_id,status,note) VALUES(?,?,?,?)",UUID.randomUUID().toString(),id,status,note);
+        notifications.send(id,"review:"+reviewId,"VERIFICATION_"+status,approved?"实名认证审核通过":"实名认证审核未通过",
+            approved?"你的实名认证已通过，可以开始"+("PUBLISHER".equals(user.get("role"))?"发布兼职。":"接取兼职。") : "你的实名认证未通过，请前往实名认证页面查看原因并重新提交。","VERIFY",null);
     }
     private void require(String value,int max) {
         if (value==null || value.isBlank() || value.length()>max) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请完整填写实名认证资料");

@@ -13,7 +13,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class WalletService {
     private final UserRepository users;
     private final String mode;
-    public WalletService(UserRepository users,@Value("${app.wallet-mode:DISABLED}") String mode){this.users=users;this.mode=mode;}
+    private final NotificationService notifications;
+    public WalletService(UserRepository users,NotificationService notifications,@Value("${app.wallet-mode:DISABLED}") String mode){this.users=users;this.notifications=notifications;this.mode=mode;}
     @Transactional(readOnly=true)
     public Map<String,Object> summary(String id,int page) {
         if(page<0 || page>10000) bad("页码无效");
@@ -34,18 +35,23 @@ public class WalletService {
     @Transactional
     public Map<String,Object> pay(String actor,String applicationId,WalletController.Amount input){
         simulate();role(actor,"PUBLISHER");long cents=cents(input.amount());
-        var apps=users.jdbc().queryForList("SELECT a.student_id,j.publisher_id,j.title FROM job_application a JOIN job j ON j.id=a.job_id WHERE a.id=?",applicationId);
+        var apps=users.jdbc().queryForList("SELECT a.student_id,a.job_id,j.publisher_id,j.title FROM job_application a JOIN job j ON j.id=a.job_id WHERE a.id=?",applicationId);
         if(apps.isEmpty() || !actor.equals(apps.get(0).get("publisher_id"))) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"接取记录不存在或无权发放");
-        users.jdbc().queryForMap("SELECT id FROM job_application WHERE id=? FOR UPDATE",applicationId);
+        // Same locking order as joining, withdrawing and cancelling: job -> application -> wallets.
+        var job=users.jdbc().queryForMap("SELECT status FROM job WHERE id=? FOR UPDATE",apps.get(0).get("job_id"));
+        var application=users.jdbc().queryForMap("SELECT status FROM job_application WHERE id=? FOR UPDATE",applicationId);
         String student=apps.get(0).get("student_id").toString();
         for(String id:new TreeSet<>(List.of(actor,student)))lock(id);
         var replay=replay(actor,input.requestKey(),"JOB_PAY",applicationId,cents); if(replay!=null)return replay;
+        if(!"OPEN".equals(job.get("status")))conflict("活动已取消，不能发放报酬");
+        if(!"ACTIVE".equals(application.get("status")))conflict("学生已退出，不能发放报酬");
         if(users.jdbc().queryForObject("SELECT COUNT(*) FROM job_payment WHERE application_id=?",Integer.class,applicationId)>0) conflict("该接取记录已结算，不能重复发放");
         String operation=operation(actor,input.requestKey(),"JOB_PAY",applicationId,cents);
         String title=apps.get(0).get("title").toString();
         change(actor,operation,"JOB_PAY",-cents,0,"发放兼职费："+title);
         change(student,operation,"JOB_INCOME",cents,0,"兼职费收入："+title);
         users.jdbc().update("INSERT INTO job_payment(id,application_id,publisher_id,student_id,amount_cents) VALUES(?,?,?,?,?)",operation,applicationId,actor,student,cents);
+        notifications.send(student,"income:"+operation,"JOB_INCOME","兼职报酬已到账","「"+title+"」的模拟报酬 ¥"+BigDecimal.valueOf(cents,2).toPlainString()+" 已存入钱包，可前往查看余额和流水。","WALLET",null);
         return result(operation,false);
     }
     @Transactional

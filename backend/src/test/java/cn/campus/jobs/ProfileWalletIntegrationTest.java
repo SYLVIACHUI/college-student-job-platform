@@ -26,6 +26,9 @@ class ProfileWalletIntegrationTest {
     @Autowired Crypto crypto; @Autowired ExpiringStore store;
     @Autowired UserRepository users;
     @Autowired JobService jobService;
+    @Autowired VerificationService verificationService;
+    @Autowired WalletService walletService;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     String publisher,student,other; Cookie pubCookie,stuCookie,otherCookie;
     @BeforeEach void fixtures() {
         publisher=create("PUBLISHER");student=create("STUDENT");other=create("PUBLISHER");
@@ -44,6 +47,74 @@ class ProfileWalletIntegrationTest {
         return jdbc.queryForObject("SELECT id FROM job_application WHERE job_id=? AND student_id=?",String.class,job,student);
     }
     Map<String,Object> vacancy(int count){return new HashMap<>(Map.of("title","校园活动协助","category","活动执行","requiredCount",count,"description","现场签到引导","requirements","准时到场","location","大学生活动中心","pay","180.50","startsAt","2099-05-06T09:00:00","durationMinutes",240));}
+    long messages(String id,String kind){return jdbc.queryForObject("SELECT COUNT(*) FROM notification WHERE recipient_id=? AND kind=?",Long.class,id,kind);}
+    @Test void notificationsRespectOwnershipReadStateAndReviewOutcome()throws Exception {
+        String review=UUID.randomUUID().toString();
+        jdbc.update("UPDATE student_user SET verification_status='PENDING',review_id=? WHERE id=?",review,student);
+        verificationService.applyDecision(student,review,true,"通过");
+        assertEquals(1,messages(student,"VERIFICATION_APPROVED"));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->verificationService.applyDecision(student,review,true,"重复"));
+        var inbox=getJson("/notifications",stuCookie,200);assertEquals(1,inbox.get("unread").asInt());
+        String message=inbox.at("/items/0/id").asText();
+        assertFalse(inbox.at("/items/0").has("recipient_id"));
+        postJson("/notifications/"+message+"/read",Map.of(),otherCookie,404);
+        assertEquals(1,getJson("/notifications/unread-count",stuCookie,200).get("unread").asInt());
+        postJson("/notifications/"+message+"/read",Map.of(),stuCookie,200);
+        postJson("/notifications/"+message+"/read",Map.of(),stuCookie,200);
+        assertEquals(0,getJson("/notifications?unreadOnly=true",stuCookie,200).get("total").asInt());
+        assertEquals(1,getJson("/notifications",stuCookie,200).get("total").asInt());
+        mvc.perform(get("/api/notifications")).andExpect(status().isUnauthorized());
+        getJson("/notifications?page=-1",stuCookie,400);
+        String rejected=UUID.randomUUID().toString();jdbc.update("UPDATE publisher_user SET verification_status='PENDING',review_id=? WHERE id=?",rejected,publisher);
+        verificationService.applyDecision(publisher,rejected,false,"补充资料");assertEquals(1,messages(publisher,"VERIFICATION_REJECTED"));
+    }
+    @Test void withdrawalAndCancellationNotifyOnlyRelevantPeople()throws Exception {
+        String id=postJson("/jobs",vacancy(2),pubCookie,200).get("id").asText();
+        postJson("/jobs/"+id+"/apply",Map.of(),stuCookie,200);postJson("/jobs/"+id+"/apply",Map.of(),stuCookie,409);
+        assertEquals(1,messages(publisher,"JOB_JOINED"));
+        postJson("/jobs/"+id+"/withdraw",Map.of(),stuCookie,200);postJson("/jobs/"+id+"/withdraw",Map.of(),stuCookie,200);
+        assertEquals(1,messages(publisher,"JOB_WITHDRAWN"));assertEquals(2,getJson("/jobs/"+id,stuCookie,200).get("remaining").asInt());
+        postJson("/jobs/"+id+"/apply",Map.of(),stuCookie,409);
+        String second=create("STUDENT");Cookie secondCookie=session(second);postJson("/jobs/"+id+"/apply",Map.of(),secondCookie,200);
+        postJson("/jobs/"+id+"/cancel",Map.of("reason","天气原因"),otherCookie,404);
+        postJson("/jobs/"+id+"/cancel",Map.of("reason","天气原因"),pubCookie,200);postJson("/jobs/"+id+"/cancel",Map.of("reason","重复"),pubCookie,200);
+        assertEquals(1,messages(second,"JOB_CANCELLED"));assertEquals(0,messages(student,"JOB_CANCELLED"));
+        assertEquals("CANCELLED",getJson("/jobs/"+id,secondCookie,200).get("status").asText());
+        assertEquals(0,getJson("/companies/"+publisher+"/jobs",stuCookie,200).get("total").asInt());
+        assertEquals("WITHDRAWN",getJson("/me/history",stuCookie,200).at("/items/0/application_status").asText());
+        postJson("/jobs/"+id+"/apply",Map.of(),session(create("STUDENT")),409);
+        assertEquals(3,getJson("/notifications",pubCookie,200).get("unread").asInt());
+        postJson("/notifications/read-all",Map.of(),pubCookie,200);
+        assertEquals(0,getJson("/notifications/unread-count",pubCookie,200).get("unread").asInt());
+        assertEquals(1,getJson("/notifications/unread-count",secondCookie,200).get("unread").asInt());
+    }
+    @Test void paymentNoticesAreAtomicAndNotDuplicated()throws Exception {
+        String app=application();var pay=amount("50.00");
+        postJson("/applications/"+app+"/payment",pay,pubCookie,400);assertEquals(0,messages(student,"JOB_INCOME"));
+        postJson("/wallet/top-up",amount("100"),pubCookie,200);
+        postJson("/applications/"+app+"/payment",pay,pubCookie,200);postJson("/applications/"+app+"/payment",pay,pubCookie,200);
+        assertEquals(1,messages(student,"JOB_INCOME"));
+        assertTrue(getJson("/notifications",stuCookie,200).at("/items/0/content").asText().contains("50.00"));
+        String job=jdbc.queryForObject("SELECT job_id FROM job_application WHERE id=?",String.class,app);
+        postJson("/jobs/"+job+"/withdraw",Map.of(),stuCookie,409);
+        postJson("/jobs/"+job+"/cancel",Map.of("reason","取消"),pubCookie,409);
+        assertEquals(0,messages(student,"JOB_CANCELLED"));
+        String rollbackJob=postJson("/jobs",vacancy(1),pubCookie,200).get("id").asText();long before=messages(publisher,"JOB_JOINED");
+        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(tx->{jobService.apply(rollbackJob,users.byId(student));tx.setRollbackOnly();});
+        assertEquals(before,messages(publisher,"JOB_JOINED"));assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=?",Integer.class,rollbackJob));
+    }
+    @Test void concurrentCancelAndPayCannotBothSucceed()throws Exception {
+        String app=application();String job=jdbc.queryForObject("SELECT job_id FROM job_application WHERE id=?",String.class,app);
+        postJson("/wallet/top-up",amount("100"),pubCookie,200);
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(2);var gate=new java.util.concurrent.CountDownLatch(1);
+        try{
+            var paying=executor.submit(()->{gate.await();try{walletService.pay(publisher,app,new WalletController.Amount(new java.math.BigDecimal("50"),UUID.randomUUID().toString()));return true;}catch(org.springframework.web.server.ResponseStatusException e){assertEquals(409,e.getStatusCode().value());return false;}});
+            var cancelling=executor.submit(()->{gate.await();try{jobService.cancel(job,users.byId(publisher),"取消测试");return true;}catch(org.springframework.web.server.ResponseStatusException e){assertEquals(409,e.getStatusCode().value());return false;}});
+            gate.countDown();boolean paid=paying.get(15,java.util.concurrent.TimeUnit.SECONDS),cancelled=cancelling.get(15,java.util.concurrent.TimeUnit.SECONDS);
+            assertNotEquals(paid,cancelled);assertEquals(paid?1:0,messages(student,"JOB_INCOME"));assertEquals(cancelled?1:0,messages(student,"JOB_CANCELLED"));
+            assertEquals(paid?5000:0,balance(student));
+        }finally{executor.shutdownNow();}
+    }
     @Test void companyHomepageScopesJobsAndProtectsRecruiterIdentity()throws Exception {
         jdbc.update("UPDATE publisher_user SET organization='测试企业',nickname='招聘小禾',name_cipher=?,identity_cipher=? WHERE id=?",crypto.encrypt("保密姓名"),crypto.encrypt("保密证件"),publisher);
         mvc.perform(put("/api/me/company").cookie(pubCookie).header("X-Requested-With","campus-web").contentType("application/json").content("{\"introduction\":\"欢迎了解我们的团队\"}"))

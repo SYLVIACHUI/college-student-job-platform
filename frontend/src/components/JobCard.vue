@@ -5,7 +5,7 @@ const emit = defineEmits(["open", "home"]);
 </script>
 <template>
   <article class="job-card vacancy-card">
-    <span class="outline-tag">{{ job.category }}</span>
+    <span class="outline-tag">{{ job.category }}<span v-if="job.status==='CANCELLED'"> · 已取消</span></span>
     <h3>
       <button class="job-title-link" @click="emit('open', job.id)">
         {{ job.title }}
@@ -26,7 +26,7 @@ const emit = defineEmits(["open", "home"]);
     </dl>
     <div class="job-bottom">
       <strong>{{
-        job.remaining > 0 ? `还需 ${job.remaining} 人` : "名额已满"
+        job.status==='CANCELLED' ? "活动已取消" : job.remaining > 0 ? `还需 ${job.remaining} 人` : "名额已满"
       }}</strong
       ><button class="text-button" @click="emit('open', job.id)">
         查看详情 →
