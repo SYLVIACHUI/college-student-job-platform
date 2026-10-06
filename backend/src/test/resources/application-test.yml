@@ -1,0 +1,12 @@
+# Isolated integration-test settings; never packaged into the application image.
+spring:
+  datasource:
+    username: sa
+    password: ""
+  data:
+    redis:
+      password: unused-test-redis-password
+app:
+  encryption-key: ZGV2LW9ubHkta2V5LTMyaHl0ZXMtbG9uZy0xMjM0NTY=
+  lookup-key: isolated-integration-test-lookup-key-32-characters
+  secure-cookie: false

@@ -34,6 +34,7 @@ export function usePortal(roleName) {
   const jobForm = reactive({
     category: "",
     requiredCount: 1,
+    recruitmentMode: "DIRECT",
     requirements: "",
     startsAt: "",
     durationMinutes: 240,
@@ -93,11 +94,11 @@ export function usePortal(roleName) {
         profile: "个人中心",
         jobDetail: "兼职详情",
         userHome: "主页",
-        history: publisher.value ? "岗位发布记录" : "兼职接取历史",
-        applicants: "岗位接取人",
+        history: publisher.value ? "岗位发布记录" : "兼职报名记录",
+        applicants: "岗位报名与筛选",
         wallet: publisher.value ? "企业结算钱包" : "我的钱包",
         verify: "实名认证",
-        jobs: publisher.value ? "岗位管理" : "我的领取",
+        jobs: publisher.value ? "岗位管理" : "我的报名",
       })[page.value] ||
       (publisher.value ? "今天，也有新的可能。" : "发现值得出发的机会。"),
   );
@@ -153,6 +154,7 @@ export function usePortal(roleName) {
     Object.assign(jobForm, {
       category: "",
       requiredCount: 1,
+      recruitmentMode: "DIRECT",
       requirements: "",
       startsAt: "",
       durationMinutes: 240,
@@ -272,6 +274,7 @@ export function usePortal(roleName) {
       Object.assign(jobForm, {
         category: "",
         requiredCount: 1,
+        recruitmentMode: "DIRECT",
         requirements: "",
         startsAt: "",
         durationMinutes: 240,

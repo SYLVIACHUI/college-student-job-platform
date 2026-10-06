@@ -1,5 +1,8 @@
 package cn.campus.jobs;
 
+import cn.campus.jobs.mapper.ExpiringStore;
+import cn.campus.jobs.mapper.MemoryStore;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties={
     "spring.datasource.url=jdbc:h2:mem:productiontest;MODE=MySQL;DATABASE_TO_LOWER=TRUE",
     "spring.datasource.username=sa","spring.datasource.password=",
+    "spring.data.redis.password=unused-test-redis-password",
     "app.encryption-key=ZGV2LW9ubHkta2V5LTMyaHl0ZXMtbG9uZy0xMjM0NTY=",
     "app.lookup-key=production-test-only-lookup-key-32-characters"
 })

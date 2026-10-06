@@ -1,4 +1,6 @@
 package cn.campus.jobs;
+
+import cn.campus.jobs.mapper.DatabaseMigrationConfig;
 import java.util.*;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.CRC32;

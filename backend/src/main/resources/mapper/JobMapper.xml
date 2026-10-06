@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.JobMapper">
+  <select id="companyJobs" resultType="map">
+    SELECT j.id,j.publisher_id,j.status,j.title,j.category,j.recruitment_mode,j.required_count,j.starts_at,j.duration_minutes,u.organization,(SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status&lt;&gt;'WITHDRAWN') AS applications,(SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status='ACTIVE') AS accepted_count,j.remaining_count AS remaining,CASE WHEN (SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status='ACTIVE')&gt;0 THEN 'ACCEPTED' ELSE 'UNACCEPTED' END AS acceptance_status FROM job j JOIN publisher_user u ON u.id=j.publisher_id WHERE j.publisher_id=#{publisherId} AND j.status='OPEN' AND j.starts_at&gt;#{now} ORDER BY j.created_at DESC,j.id DESC LIMIT 12 OFFSET #{offset}
+  </select>
+  <select id="companyJobCount" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM job j WHERE j.publisher_id=#{publisherId} AND j.status='OPEN' AND j.starts_at&gt;#{now}
+  </select>
+  <select id="listJobs" resultType="map">
+    SELECT j.id,j.publisher_id,j.status,j.title,j.category,j.recruitment_mode,j.required_count,j.starts_at,j.duration_minutes,u.organization,(SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status&lt;&gt;'WITHDRAWN') AS applications,(SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status='ACTIVE') AS accepted_count,j.remaining_count AS remaining,CASE WHEN (SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status='ACTIVE')&gt;0 THEN 'ACCEPTED' ELSE 'UNACCEPTED' END AS acceptance_status,(SELECT mine.status FROM job_application mine WHERE mine.job_id=j.id AND mine.student_id=#{viewerId}) AS application_status,CASE WHEN EXISTS(SELECT 1 FROM job_application mine WHERE mine.job_id=j.id AND mine.student_id=#{viewerId} AND mine.status IN ('ACTIVE','PENDING')) THEN 1 ELSE 0 END AS applied FROM job j JOIN publisher_user u ON u.id=j.publisher_id<choose><when test="publisher"> WHERE j.publisher_id=#{viewerId}</when><otherwise> WHERE j.status='OPEN'</otherwise></choose> ORDER BY j.created_at DESC,j.id DESC LIMIT 100
+  </select>
+  <select id="detail" resultType="map">
+    SELECT j.*,u.organization FROM job j JOIN publisher_user u ON u.id=j.publisher_id WHERE j.id=#{id}
+  </select>
+  <select id="participants" resultType="map">
+    SELECT u.id,u.nickname,u.avatar_version FROM job_application a JOIN student_user u ON u.id=a.student_id WHERE a.job_id=#{jobId} AND a.status='ACTIVE' ORDER BY a.created_at,a.id
+  </select>
+  <select id="registeredCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM job_application WHERE job_id=#{jobId} AND status&lt;&gt;'WITHDRAWN'
+  </select>
+  <select id="ownApplication" resultType="map">
+    SELECT a.status,CASE WHEN p.id IS NULL THEN 0 ELSE 1 END AS paid FROM job_application a LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.job_id=#{jobId} AND a.student_id=#{studentId}
+  </select>
+  <insert id="insertJob">
+    INSERT INTO job(id,publisher_id,title,category,required_count,remaining_count,description,requirements,location,pay,pay_unit,starts_at,duration_minutes,recruitment_mode) VALUES(#{job.id},#{job.publisherId},#{job.title},#{job.category},#{job.requiredCount},#{job.requiredCount},#{job.description},#{job.requirements},#{job.location},#{job.pay},#{job.payUnit},#{job.startsAt},#{job.durationMinutes},#{job.recruitmentMode})
+  </insert>
+  <select id="enrollment" resultType="map">
+    SELECT required_count,remaining_count,starts_at,status,publisher_id,title,recruitment_mode FROM job WHERE id=#{id}
+  </select>
+  <update id="reserveSeat">
+    UPDATE job SET remaining_count=remaining_count-1
+    WHERE id=#{id} AND remaining_count&gt;0 AND status='OPEN' AND recruitment_mode=#{mode}
+      AND (starts_at IS NULL OR starts_at&gt;CURRENT_TIMESTAMP)
+  </update>
+  <update id="releaseSeat">
+    UPDATE job SET remaining_count=remaining_count+1
+    WHERE id=#{id} AND remaining_count&lt;required_count AND status='OPEN'
+  </update>
+  <insert id="insertApplication">
+    INSERT INTO job_application(id,job_id,student_id,status,resume_cipher) VALUES(#{id},#{jobId},#{studentId},#{status},#{resumeCipher})
+  </insert>
+  <select id="decisionApplication" resultType="map">
+    SELECT student_id,status FROM job_application WHERE id=#{id} AND job_id=#{jobId}
+  </select>
+  <update id="reviewApplication">
+    UPDATE job_application SET status=#{status},reviewed_at=CURRENT_TIMESTAMP WHERE id=#{id} AND status='PENDING'
+  </update>
+  <select id="lockOwnApplication" resultType="map">
+    SELECT id,status FROM job_application WHERE job_id=#{jobId} AND student_id=#{studentId} FOR UPDATE
+  </select>
+  <select id="paymentCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM job_payment WHERE application_id=#{applicationId}
+  </select>
+  <update id="withdrawApplication">
+    UPDATE job_application SET status='WITHDRAWN',withdrawn_at=CURRENT_TIMESTAMP WHERE id=#{id} AND status IN ('ACTIVE','PENDING')
+  </update>
+  <select id="jobPaymentCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM job_payment p JOIN job_application a ON a.id=p.application_id WHERE a.job_id=#{jobId}
+  </select>
+  <select id="cancelRecipients" resultType="map">
+    SELECT student_id FROM job_application WHERE job_id=#{jobId} AND status IN ('ACTIVE','PENDING')
+  </select>
+  <update id="cancelJob">
+    UPDATE job SET status='CANCELLED',cancel_reason=#{reason},cancelled_at=CURRENT_TIMESTAMP WHERE id=#{id}
+  </update>
+  <select id="lockJob" resultType="map">
+    SELECT * FROM job WHERE id=#{id} FOR UPDATE
+  </select>
+</mapper>

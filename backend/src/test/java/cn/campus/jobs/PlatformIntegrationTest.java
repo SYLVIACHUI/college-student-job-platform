@@ -1,5 +1,8 @@
 package cn.campus.jobs;
 
+import cn.campus.jobs.service.Crypto;
+import cn.campus.jobs.mapper.ExpiringStore;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
@@ -18,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:integration;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1"})
-@AutoConfigureMockMvc @ActiveProfiles("dev")
+@AutoConfigureMockMvc @ActiveProfiles({"dev","test"})
 class PlatformIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;

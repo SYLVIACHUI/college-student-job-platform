@@ -8,22 +8,31 @@ spring:
       max-file-size: 2MB
       max-request-size: 3MB
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/campusjobs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
-    username: root
-    password: root123
+    url: ${DB_URL:jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:campusjobs}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   data:
     redis:
-      host: 127.0.0.1
-      port: 6379
-      password: root123
-      database: 0
-      timeout: 3s
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:3s}
   jackson:
     time-zone: Asia/Shanghai
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: false
+    call-setters-on-nulls: true
+    return-instance-for-empty-row: true
+    local-cache-scope: STATEMENT
+    cache-enabled: false
+    jdbc-type-for-null: "NULL"
 app:
   wallet-mode: ${WALLET_MODE:SIMULATED}
   encryption-key: ${APP_ENCRYPTION_KEY}
   lookup-key: ${APP_LOOKUP_KEY}
-  secure-cookie: true
+  secure-cookie: ${APP_SECURE_COOKIE:true}
   sms-url: ${SMS_GATEWAY_URL:}
   sms-token: ${SMS_GATEWAY_TOKEN:}

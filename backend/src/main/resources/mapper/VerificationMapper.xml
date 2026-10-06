@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.VerificationMapper">
+  <select id="events" resultType="map">
+    SELECT id,status,note,created_at FROM verification_event WHERE user_id=#{userId} ORDER BY created_at DESC
+  </select>
+  <update id="submitPublisher">
+    UPDATE publisher_user SET organization=#{organization},surname=#{surname},name_cipher=#{nameCipher},identity_cipher=#{identityCipher} WHERE id=#{id}
+  </update>
+  <update id="submitStudent">
+    UPDATE student_user SET school=#{school},name_cipher=#{nameCipher},student_number_cipher=#{studentNumberCipher} WHERE id=#{id}
+  </update>
+  <update id="markPending">
+    UPDATE <choose><when test="table == 'publisher_user'">publisher_user</when><otherwise>student_user</otherwise></choose> SET email=#{email},verification_status='PENDING',review_note=#{note},review_id=#{reviewId},<choose><when test="table == 'publisher_user'">can_publish</when><otherwise>can_accept</otherwise></choose>=0 WHERE id=#{id}
+  </update>
+  <insert id="insertEvent">
+    INSERT INTO verification_event(id,user_id,status,note) VALUES(#{id},#{userId},#{status},#{note})
+  </insert>
+  <update id="applyDecision">
+    UPDATE <choose><when test="table == 'publisher_user'">publisher_user</when><otherwise>student_user</otherwise></choose> SET verification_status=#{status},review_note=#{note},<choose><when test="table == 'publisher_user'">can_publish</when><otherwise>can_accept</otherwise></choose>=#{permission} WHERE id=#{id}
+  </update>
+</mapper>

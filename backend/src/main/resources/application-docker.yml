@@ -1,0 +1,18 @@
+server:
+  shutdown: graceful
+spring:
+  datasource:
+    url: jdbc:mysql://mysql:3306/${DB_NAME:campusjobs}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: ${REDIS_PASSWORD}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+app:
+  encryption-key: ${APP_ENCRYPTION_KEY}
+  lookup-key: ${APP_LOOKUP_KEY}
+  secure-cookie: ${APP_SECURE_COOKIE:false}

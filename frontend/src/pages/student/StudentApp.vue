@@ -114,7 +114,7 @@ const {
           <LayoutDashboard :size="19" />发现兼职<span class="nav-dot" />
         </button>
         <button :class="{ active: page === 'jobs' }" @click="navigate('jobs')">
-          <BriefcaseBusiness :size="19" />我的领取
+          <BriefcaseBusiness :size="19" />我的报名
         </button>
         <button
           :class="{ active: page === 'verify' }"
@@ -593,7 +593,7 @@ const {
                 ><small>最新100条兼职机会</small>
               </article>
               <article class="panel stat">
-                <span>已领取岗位</span
+                <span>已报名岗位</span
                 ><strong
                   >{{
                     jobs
@@ -614,7 +614,7 @@ const {
             <section class="panel jobs-panel">
               <div class="section-title">
                 <div>
-                  <h2>{{ page === "jobs" ? "我的领取" : "最新兼职" }}</h2>
+                  <h2>{{ page === "jobs" ? "我的报名" : "最新兼职" }}</h2>
                   <p>每15秒自动更新，让好机会及时抵达。</p>
                 </div>
                 <button
@@ -634,7 +634,7 @@ const {
               <div class="job-list">
                 <JobCard
                   v-for="job in filteredJobs.filter(
-                    (j) => page !== 'jobs' || j.applied,
+                    (j) => page !== 'jobs' || j.application_status,
                   )"
                   :key="job.id"
                   :job="job"
@@ -644,7 +644,7 @@ const {
               </div>
               <div
                 v-if="
-                  !filteredJobs.filter((j) => page !== 'jobs' || j.applied)
+                  !filteredJobs.filter((j) => page !== 'jobs' || j.application_status)
                     .length
                 "
                 class="empty-state"
@@ -655,7 +655,7 @@ const {
                     search
                       ? "没有找到匹配的岗位"
                       : page === "jobs"
-                        ? "还没有领取兼职"
+                        ? "还没有报名兼职"
                         : "新的机会正在路上"
                   }}
                 </h3>

@@ -11,7 +11,16 @@
 
 ## 运行方法
 
-项目需要 MYSQL Redis Nginx 部署，具体部署方法参考'小皮'平台(phpstudy:https://www.xp.cn/)
+推荐使用 Docker Compose，一起启动前端 Nginx、后端、MySQL 和 Redis。安装并启动 Docker Desktop（Linux 容器）后，在项目根目录执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\init-docker-env.ps1
+docker compose up -d --build --wait --wait-timeout 300
+```
+
+访问 `http://localhost:8088/publisher`、`/student`、`/admin`。默认是本地演示模式，提供模拟验证码和审核，并使用容器中的 MySQL、Redis。正式部署、管理员创建、日志与停止命令见 [Docker 部署说明](docs/Docker部署.md)。
+
+也可以保留原本的 IDEA + 本机 MySQL、Redis、Nginx 启动方式：
 
 在 IDEA 中打开 pom.xml 打开项目 运行后端'Application'后，在终端输入./scripts/frontend-nginx.ps1后，访问 'http://localhost:8088/publisher'、'/student' 或 '/admin'
 后端仍在 IDEA 中运行于 8080,详细说明见 [Nginx 前端部署](docs/Nginx前端部署.md)。
@@ -19,15 +28,20 @@
 ## 技术栈与目录
 
 - Java 17+、Spring Boot 3.5.16、Maven 多模块父工程。
+- MyBatis 3.0.5 Starter：Mapper 接口在 `backend/src/main/java/cn/campus/jobs/mapper`，SQL 和实体映射在 `backend/src/main/resources/mapper`。
+- Mapper 分工、事务与数据库升级说明见 [MyBatis 数据访问说明](docs/MyBatis数据访问说明.md)。
+- 报名/录取使用 MySQL 原子条件更新扣减剩余名额，联合唯一约束防止重复报名，详见 [报名名额并发控制](docs/报名名额并发控制.md)。
 - Vue 3 + Vite，发布端 `/publisher`、手机领取端 `/student`。
 - 正式配置：MySQL + Redis；Flyway 自动迁移。
-- 显式 `dev` 配置：H2 文件库 + 内存验证码/会话，免数据库安装进行本地演示。
-- `backend/src/main/java/cn/campus/jobs`：接口、认证服务、认证审核状态机、加密、持久化与缓存适配器。
+- `dev` 模式提供模拟验证码和审核；Docker 演示模式仍使用容器里的 MySQL、Redis。
+- `backend/src/main/java/cn/campus/jobs`：根包保留 `Application.java`；`controller` 存放接口、异常处理与 Web 配置，`service` 存放业务服务及辅助组件，`mapper` 存放数据库操作、迁移配置与缓存适配器，`entity` 存放实体。
 - `backend/src/main/resources/db/migration`：新库初始化，企业与学生直接分表；`db/legacy-migration` 保留已运行版本的原始脚本；`db/common-migration` 存放两种数据库共用的后续 SQL。
 - `frontend/src`：双端页面、接口封装与响应式样式。
 - `docs/API.md`：接口与状态说明。
 
 ### 完整演示流程
+
+企业发布岗位时可选择“简历筛选”：学生提交在线简历后，由企业录取或不录取；岗位展示已报名、需要及已录取人数。操作流程和接口见 [简历筛选岗位说明](docs/简历筛选岗位说明.md)。
 
 1. 选择发布端，点击“手机号注册”，填写测试手机号，获取页面展示的开发验证码，设置包含字母和数字的 8–64 位 ASCII 密码。
 2. 注册完成后用手机号和密码登录。账号默认为手机号；账户信息页面仅展示脱敏手机号。
@@ -37,7 +51,7 @@
 6. 在手机或另一个浏览器注册领取端账号，填写学校、姓名和学号，提交认证并模拟通过后领取岗位。同一手机号可分别注册两种角色。
 7. 领取端首页每 15 秒刷新最新岗位，也支持手动刷新。同一岗位不能重复领取。
 
-一个浏览器共享一个 HttpOnly 登录会话，切换身份会退出当前会话；双端同时测试请使用不同浏览器、隐私窗口或手机。演示数据库位于后端运行目录的 `data/campus.mv.db`；重启后账号与岗位保留，内存验证码和登录会话失效。
+一个浏览器共享一个 HttpOnly 登录会话，切换身份会退出当前会话；双端同时测试请使用不同浏览器、隐私窗口或手机。Docker 数据库和 Redis 使用持久化数据卷；账号、岗位和报名记录保存在 MySQL，会话按有效期存放在 Redis。
 
 ## 数据模型与隐私
 

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.ProfileMapper">
+  <select id="avatar" resultType="_byte[]">
+    SELECT image_data FROM user_avatar WHERE user_id=#{userId}
+  </select>
+  <update id="updateStudent">
+    UPDATE student_user SET nickname=#{nickname},birthday=#{birthday},grade=#{grade},major=#{major},bio=#{bio} WHERE id=#{id}
+  </update>
+  <update id="updatePublisher">
+    UPDATE publisher_user SET nickname=#{nickname},birthday=#{birthday},bio=#{bio} WHERE id=#{id}
+  </update>
+  <delete id="deleteAvatar">
+    DELETE FROM user_avatar WHERE user_id=#{userId}
+  </delete>
+  <insert id="insertAvatar">
+    INSERT INTO user_avatar(user_id,image_data) VALUES(#{userId},#{image})
+  </insert>
+  <update id="setAvatarVersion">
+    UPDATE <choose><when test="table == 'publisher_user'">publisher_user</when><otherwise>student_user</otherwise></choose> SET avatar_version=#{version} WHERE id=#{id}
+  </update>
+  <select id="historyCount" resultType="java.lang.Long">
+    <choose><when test="publisher">SELECT COUNT(*) FROM job WHERE publisher_id=#{userId}</when><otherwise>SELECT COUNT(*) FROM job_application WHERE student_id=#{userId}</otherwise></choose>
+  </select>
+  <select id="publisherHistory" resultType="map">
+    SELECT j.*, (SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status&lt;&gt;'WITHDRAWN') AS application_count, (SELECT COUNT(*) FROM job_application a WHERE a.job_id=j.id AND a.status='ACTIVE') AS accepted_count FROM job j WHERE publisher_id=#{publisherId} ORDER BY created_at DESC,id DESC LIMIT 20 OFFSET #{offset}
+  </select>
+  <select id="studentHistory" resultType="map">
+    SELECT a.id AS application_id,a.status AS application_status,a.created_at AS accepted_at,j.status AS job_status,j.recruitment_mode,j.id,j.title,j.location,j.pay,j.pay_unit,j.publisher_id,u.organization,p.amount_cents AS paid_cents,p.created_at AS paid_at FROM job_application a JOIN job j ON j.id=a.job_id JOIN publisher_user u ON u.id=j.publisher_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.student_id=#{studentId} ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET #{offset}
+  </select>
+  <select id="ownedJob" resultType="map">
+    SELECT * FROM job WHERE id=#{id} AND publisher_id=#{publisherId}
+  </select>
+  <select id="applicants" resultType="map">
+    SELECT a.id AS application_id,a.status AS application_status,a.created_at AS accepted_at,a.reviewed_at,a.resume_cipher,u.id,u.role,u.nickname,u.avatar_version,u.grade,u.major,u.school,u.name_cipher,u.student_number_cipher,p.amount_cents AS paid_cents FROM job_application a JOIN student_user u ON u.id=a.student_id LEFT JOIN job_payment p ON p.application_id=a.id WHERE a.job_id=#{jobId} ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET #{offset}
+  </select>
+  <select id="registeredCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM job_application WHERE job_id=#{jobId} AND status&lt;&gt;'WITHDRAWN'
+  </select>
+  <select id="acceptedCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM job_application WHERE job_id=#{jobId} AND status='ACTIVE'
+  </select>
+  <select id="applicationCount" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM job_application WHERE job_id=#{jobId}
+  </select>
+</mapper>

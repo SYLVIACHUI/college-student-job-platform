@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.WalletMapper">
+  <select id="balances" resultType="map">
+    SELECT balance_cents,frozen_cents FROM wallet WHERE user_id=#{userId}
+  </select>
+  <select id="entries" resultType="map">
+    SELECT id,kind,delta_cents,frozen_delta_cents,balance_after_cents,frozen_after_cents,description,created_at FROM wallet_entry WHERE user_id=#{userId} ORDER BY created_at DESC,id DESC LIMIT 20 OFFSET #{offset}
+  </select>
+  <select id="entryCount" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM wallet_entry WHERE user_id=#{userId}
+  </select>
+  <select id="withdrawals" resultType="map">
+    SELECT id,amount_cents,status,created_at FROM withdrawal WHERE user_id=#{userId} ORDER BY created_at DESC,id DESC LIMIT 20
+  </select>
+  <select id="paymentApplication" resultType="map">
+    SELECT a.student_id,a.job_id,j.publisher_id,j.title FROM job_application a JOIN job j ON j.id=a.job_id WHERE a.id=#{id}
+  </select>
+  <select id="lockJob" resultType="map">
+    SELECT status FROM job WHERE id=#{id} FOR UPDATE
+  </select>
+  <select id="lockApplication" resultType="map">
+    SELECT status FROM job_application WHERE id=#{id} FOR UPDATE
+  </select>
+  <select id="paymentCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM job_payment WHERE application_id=#{applicationId}
+  </select>
+  <insert id="insertPayment">
+    INSERT INTO job_payment(id,application_id,publisher_id,student_id,amount_cents) VALUES(#{id},#{applicationId},#{publisherId},#{studentId},#{amountCents})
+  </insert>
+  <insert id="insertWithdrawal">
+    INSERT INTO withdrawal(id,user_id,amount_cents) VALUES(#{id},#{userId},#{amountCents})
+  </insert>
+  <select id="lockWithdrawal" resultType="map">
+    SELECT * FROM withdrawal WHERE id=#{id} AND user_id=#{userId} FOR UPDATE
+  </select>
+  <update id="cancelWithdrawal">
+    UPDATE withdrawal SET status='CANCELLED' WHERE id=#{id}
+  </update>
+  <select id="lockWallet" resultType="map">
+    SELECT user_id FROM wallet WHERE user_id=#{userId} FOR UPDATE
+  </select>
+  <update id="updateBalances">
+    UPDATE wallet SET balance_cents=#{balanceCents},frozen_cents=#{frozenCents} WHERE user_id=#{userId}
+  </update>
+  <insert id="insertEntry">
+    INSERT INTO wallet_entry(id,user_id,operation_id,kind,delta_cents,frozen_delta_cents,balance_after_cents,frozen_after_cents,description) VALUES(#{id},#{userId},#{operationId},#{kind},#{deltaCents},#{frozenDeltaCents},#{balanceCents},#{frozenCents},#{description})
+  </insert>
+  <select id="operation" resultType="map">
+    SELECT * FROM wallet_operation WHERE actor_id=#{actorId} AND request_key=#{requestKey}
+  </select>
+  <insert id="insertOperation">
+    INSERT INTO wallet_operation(id,actor_id,request_key,kind,target_id,amount_cents) VALUES(#{id},#{actorId},#{requestKey},#{kind},#{targetId},#{amountCents})
+  </insert>
+</mapper>

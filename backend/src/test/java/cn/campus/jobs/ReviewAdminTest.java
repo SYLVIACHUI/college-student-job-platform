@@ -1,11 +1,18 @@
 package cn.campus.jobs;
 
+import cn.campus.jobs.controller.ApiController;
+import cn.campus.jobs.service.Crypto;
+import cn.campus.jobs.mapper.ExpiringStore;
+import cn.campus.jobs.mapper.UserRepository;
+import cn.campus.jobs.service.VerificationService;
+
 import java.util.*;
 import java.time.Duration;
 import jakarta.servlet.http.Cookie;
 import com.fasterxml.jackson.databind.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
@@ -16,13 +23,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties="spring.datasource.url=jdbc:h2:mem:admin_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
-@AutoConfigureMockMvc @ActiveProfiles("dev")
+@AutoConfigureMockMvc @ActiveProfiles({"dev","test"})
 class ReviewAdminTest {
+    @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;@Autowired ObjectMapper json;@Autowired UserRepository users;@Autowired Crypto crypto;@Autowired ExpiringStore store;@Autowired VerificationService verification;
     String adminId,username;Cookie admin;
     @BeforeEach void setup()throws Exception{
         adminId=UUID.randomUUID().toString();username="review_"+adminId.substring(0,8);
-        users.jdbc().update("INSERT INTO review_admin(id,username,password_hash,display_name) VALUES(?,?,?,?)",adminId,username,new BCryptPasswordEncoder(12).encode("ReviewTest2026!"),"测试审核员");
+        jdbc.update("INSERT INTO review_admin(id,username,password_hash,display_name) VALUES(?,?,?,?)",adminId,username,new BCryptPasswordEncoder(12).encode("ReviewTest2026!"),"测试审核员");
         var response=mvc.perform(post("/api/admin/login").header("X-Requested-With","campus-web").contentType("application/json").content(json.writeValueAsBytes(Map.of("username",username,"password","ReviewTest2026!")))).andExpect(status().isOk()).andReturn();
         admin=response.getResponse().getCookie("CAMPUS_REVIEW_SESSION");assertNotNull(admin);assertTrue(admin.isHttpOnly());assertEquals("/api/admin",admin.getPath());
     }
@@ -39,7 +47,7 @@ class ReviewAdminTest {
         String old=users.byId(stu).get("review_id").toString();decide(stu,old,false,"请核对学号",200);assertEquals(0,users.byId(stu).get("can_accept"));
         submit(stu,"STUDENT");decide(stu,old,true,"过期版本",409);
         decide(stu,users.byId(stu).get("review_id").toString(),true,"资料核验通过",200);assertEquals(1,users.byId(stu).get("can_accept"));
-        assertEquals(3,users.jdbc().queryForObject("SELECT COUNT(*) FROM review_action WHERE admin_id=?",Integer.class,adminId));
+        assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM review_action WHERE admin_id=?",Integer.class,adminId));
         assertTrue(getJson("/history",200).get("total").asInt()>=3);getJson("/reviews/"+pub,409);
     }
     @Test void businessSessionCannotReadOrReviewAndLogoutRevokesSession()throws Exception{
@@ -54,6 +62,6 @@ class ReviewAdminTest {
         String id=applicant("STUDENT"),review=users.byId(id).get("review_id").toString();decide(id,review,false," ",400);
         mvc.perform(post("/api/admin/reviews/"+id+"/decision").cookie(admin).contentType("application/json").content("{}")).andExpect(status().isForbidden());
         getJson("/reviews?role=ADMIN",400);
-        users.jdbc().update("UPDATE review_admin SET enabled=0 WHERE id=?",adminId);getJson("/me",401);
+        jdbc.update("UPDATE review_admin SET enabled=0 WHERE id=?",adminId);getJson("/me",401);
     }
 }

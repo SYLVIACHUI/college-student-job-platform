@@ -623,7 +623,7 @@ const {
                 ><small>你发布的兼职机会</small>
               </article>
               <article class="panel stat">
-                <span>岗位领取人次</span
+                <span>岗位报名人次</span
                 ><strong
                   >{{
                     jobs

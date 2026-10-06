@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.CompanyMapper">
+  <select id="profile" resultType="map">
+    SELECT introduction FROM company_profile WHERE publisher_id=#{publisherId}
+  </select>
+  <select id="photos" resultType="map">
+    SELECT id FROM company_photo WHERE publisher_id=#{publisherId} ORDER BY created_at,id
+  </select>
+  <select id="profileCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM company_profile WHERE publisher_id=#{publisherId}
+  </select>
+  <insert id="insertProfile">
+    INSERT INTO company_profile(publisher_id,introduction) VALUES(#{publisherId},#{introduction})
+  </insert>
+  <update id="updateProfile">
+    UPDATE company_profile SET introduction=#{introduction} WHERE publisher_id=#{publisherId}
+  </update>
+  <select id="photoCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM company_photo WHERE publisher_id=#{publisherId}
+  </select>
+  <insert id="insertPhoto">
+    INSERT INTO company_photo(id,publisher_id,image_data) VALUES(#{id},#{publisherId},#{image})
+  </insert>
+  <delete id="deletePhoto">
+    DELETE FROM company_photo WHERE id=#{id} AND publisher_id=#{publisherId}
+  </delete>
+  <select id="photo" resultType="_byte[]">
+    SELECT image_data FROM company_photo WHERE publisher_id=#{publisherId} AND id=#{id}
+  </select>
+</mapper>

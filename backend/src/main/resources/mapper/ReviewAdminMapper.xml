@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.ReviewAdminMapper">
+  <select id="passwordHash" resultType="map">
+    SELECT password_hash FROM review_admin WHERE username=#{username}
+  </select>
+  <insert id="insertAdmin">
+    INSERT INTO review_admin(id,username,password_hash,display_name) VALUES(#{id},#{username},#{passwordHash},#{displayName})
+  </insert>
+  <select id="account" resultType="map">
+    SELECT * FROM review_admin WHERE username=#{username}
+  </select>
+  <select id="current" resultType="map">
+    SELECT id,username,display_name FROM review_admin WHERE id=#{id} AND enabled=1
+  </select>
+  <select id="pendingCount" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM (SELECT id,role,nickname,organization AS affiliation,verification_status,review_id FROM publisher_user UNION ALL SELECT id,role,nickname,school AS affiliation,verification_status,review_id FROM student_user) u WHERE u.verification_status='PENDING' <if test="role != 'ALL'"> AND u.role=#{role}</if>
+  </select>
+  <select id="pending" resultType="map">
+    SELECT u.*,e.created_at AS submitted_at FROM (SELECT id,role,nickname,organization AS affiliation,verification_status,review_id FROM publisher_user UNION ALL SELECT id,role,nickname,school AS affiliation,verification_status,review_id FROM student_user) u LEFT JOIN verification_event e ON e.id=u.review_id WHERE u.verification_status='PENDING' <if test="role != 'ALL'"> AND u.role=#{role}</if> ORDER BY e.created_at,u.id LIMIT 20 OFFSET #{offset}
+  </select>
+  <select id="events" resultType="map">
+    SELECT status,note,created_at FROM verification_event WHERE user_id=#{userId} ORDER BY created_at DESC LIMIT 20
+  </select>
+  <insert id="insertAction">
+    INSERT INTO review_action(id,admin_id,user_id,review_id,decision,note) VALUES(#{id},#{adminId},#{userId},#{reviewId},#{decision},#{note})
+  </insert>
+  <select id="history" resultType="map">
+    SELECT a.*,r.display_name AS reviewer,u.role,u.nickname,u.affiliation FROM review_action a JOIN review_admin r ON r.id=a.admin_id JOIN (SELECT id,role,nickname,organization AS affiliation,verification_status,review_id FROM publisher_user UNION ALL SELECT id,role,nickname,school AS affiliation,verification_status,review_id FROM student_user) u ON u.id=a.user_id ORDER BY a.created_at DESC,a.id DESC LIMIT 20 OFFSET #{offset}
+  </select>
+  <select id="historyCount" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM review_action
+  </select>
+</mapper>

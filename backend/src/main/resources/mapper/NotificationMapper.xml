@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.NotificationMapper">
+  <insert id="insert">
+    INSERT INTO notification(id,recipient_id,event_key,kind,title,content,target_type,target_id) VALUES(#{id},#{recipientId},#{eventKey},#{kind},#{title},#{content},#{targetType},#{targetId})
+  </insert>
+  <select id="unreadCount" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM notification WHERE recipient_id=#{recipientId} AND read_at IS NULL
+  </select>
+  <select id="list" resultType="map">
+    SELECT id,kind,title,content,target_type,target_id,read_at,created_at FROM notification WHERE recipient_id=#{recipientId} <if test="unreadOnly"> AND read_at IS NULL</if> ORDER BY created_at DESC,id DESC LIMIT 20 OFFSET #{offset}
+  </select>
+  <select id="count" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM notification WHERE recipient_id=#{recipientId} <if test="unreadOnly"> AND read_at IS NULL</if>
+  </select>
+  <select id="ownedCount" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM notification WHERE id=#{id} AND recipient_id=#{recipientId}
+  </select>
+  <update id="markRead">
+    UPDATE notification SET read_at=CURRENT_TIMESTAMP WHERE id=#{id} AND recipient_id=#{recipientId} AND read_at IS NULL
+  </update>
+  <update id="markAllRead">
+    UPDATE notification SET read_at=CURRENT_TIMESTAMP WHERE recipient_id=#{recipientId} AND read_at IS NULL
+  </update>
+</mapper>

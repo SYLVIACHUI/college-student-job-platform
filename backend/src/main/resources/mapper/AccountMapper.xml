@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.AccountMapper">
+  <resultMap id="accountFields" type="cn.campus.jobs.entity.AccountFields" autoMapping="false">
+    <constructor>
+      <idArg column="id" javaType="java.lang.String"/>
+      <arg column="account_hash" javaType="java.lang.String"/>
+      <arg column="phone_cipher" javaType="java.lang.String"/>
+      <arg column="password_hash" javaType="java.lang.String"/>
+      <arg column="email" javaType="java.lang.String"/>
+      <arg column="nickname" javaType="java.lang.String"/>
+      <arg column="birthday" javaType="java.time.LocalDate"/>
+      <arg column="bio" javaType="java.lang.String"/>
+      <arg column="avatar_version" javaType="java.lang.String"/>
+      <arg column="verification_status" javaType="java.lang.String"/>
+      <arg column="review_note" javaType="java.lang.String"/>
+      <arg column="review_id" javaType="java.lang.String"/>
+      <arg column="last_login_at" javaType="java.time.LocalDateTime"/>
+      <arg column="created_at" javaType="java.time.LocalDateTime"/>
+    </constructor>
+  </resultMap>
+  <select id="role" resultType="java.lang.String">
+    SELECT role FROM account_identity WHERE id=#{id}
+  </select>
+  <insert id="insertIdentity">
+    INSERT INTO account_identity(id,role) VALUES(#{id},#{role})
+  </insert>
+  <insert id="createWallet">
+    INSERT INTO wallet(user_id) VALUES(#{userId})
+  </insert>
+  <update id="touchLogin">
+    UPDATE <choose><when test="table == 'publisher_user'">publisher_user</when><otherwise>student_user</otherwise></choose> SET last_login_at=CURRENT_TIMESTAMP WHERE id=#{userId}
+  </update>
+  <select id="publishedCount" resultType="java.lang.Long">
+    SELECT COUNT(*) FROM job WHERE publisher_id=#{publisherId}
+  </select>
+  <update id="seedPublisher">
+    UPDATE publisher_user SET organization=#{organization},surname=#{surname},name_cipher=#{nameCipher},identity_cipher=#{identityCipher},nickname=#{nickname},verification_status='APPROVED',can_publish=1,review_id=#{reviewId},review_note=#{note} WHERE id=#{id}
+  </update>
+  <update id="seedStudent">
+    UPDATE student_user SET school=#{school},name_cipher=#{nameCipher},student_number_cipher=#{studentNumberCipher},nickname=#{nickname},grade=#{grade},major=#{major},verification_status='APPROVED',can_accept=1,review_id=#{reviewId},review_note=#{note} WHERE id=#{id}
+  </update>
+  <insert id="seedVerification">
+    INSERT INTO verification_event(id,user_id,status,note) VALUES(#{id},#{userId},'APPROVED',#{note})
+  </insert>
+</mapper>

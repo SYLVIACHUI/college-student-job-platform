@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.campus.jobs.mapper.PublisherUserMapper">
+  <resultMap id="publisher" type="cn.campus.jobs.entity.PublisherUser" autoMapping="false">
+    <constructor>
+      <arg resultMap="cn.campus.jobs.mapper.AccountMapper.accountFields" javaType="cn.campus.jobs.entity.AccountFields"/>
+      <arg column="organization" javaType="java.lang.String"/>
+      <arg column="surname" javaType="java.lang.String"/>
+      <arg column="name_cipher" javaType="java.lang.String"/>
+      <arg column="identity_cipher" javaType="java.lang.String"/>
+      <arg column="can_publish" javaType="_int"/>
+    </constructor>
+  </resultMap>
+  <select id="findById" resultMap="publisher">
+    SELECT * FROM publisher_user WHERE id=#{id}<if test="lock"> FOR UPDATE</if>
+  </select>
+  <select id="findByAccount" resultMap="publisher">
+    SELECT * FROM publisher_user WHERE account_hash=#{hash}
+  </select>
+  <insert id="insert">
+    INSERT INTO publisher_user(id,account_hash,phone_cipher,password_hash)
+    VALUES(#{id},#{hash},#{phoneCipher},#{passwordHash})
+  </insert>
+</mapper>

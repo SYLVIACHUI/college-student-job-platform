@@ -1,5 +1,13 @@
 package cn.campus.jobs;
 
+import cn.campus.jobs.service.Crypto;
+import cn.campus.jobs.mapper.ExpiringStore;
+import cn.campus.jobs.service.JobService;
+import cn.campus.jobs.mapper.UserRepository;
+import cn.campus.jobs.service.VerificationService;
+import cn.campus.jobs.controller.WalletController;
+import cn.campus.jobs.service.WalletService;
+
 import java.util.*;
 import java.time.Duration;
 import java.io.ByteArrayOutputStream;
@@ -20,7 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:profiles;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1"})
-@AutoConfigureMockMvc @ActiveProfiles("dev")
+@AutoConfigureMockMvc @ActiveProfiles({"dev","test"})
 class ProfileWalletIntegrationTest {
     @Autowired MockMvc mvc; @Autowired ObjectMapper json; @Autowired JdbcTemplate jdbc;
     @Autowired Crypto crypto; @Autowired ExpiringStore store;
@@ -48,6 +56,129 @@ class ProfileWalletIntegrationTest {
     }
     Map<String,Object> vacancy(int count){return new HashMap<>(Map.of("title","校园活动协助","category","活动执行","requiredCount",count,"description","现场签到引导","requirements","准时到场","location","大学生活动中心","pay","180.50","startsAt","2099-05-06T09:00:00","durationMinutes",240));}
     long messages(String id,String kind){return jdbc.queryForObject("SELECT COUNT(*) FROM notification WHERE recipient_id=? AND kind=?",Long.class,id,kind);}
+    int remaining(String jobId){return jdbc.queryForObject("SELECT remaining_count FROM job WHERE id=?",Integer.class,jobId);}
+    void assertCapacity(String jobId,int expectedRemaining){
+        assertEquals(expectedRemaining,remaining(jobId));
+        int required=jdbc.queryForObject("SELECT required_count FROM job WHERE id=?",Integer.class,jobId);
+        int active=jdbc.queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=? AND status='ACTIVE'",Integer.class,jobId);
+        assertEquals(required,remaining(jobId)+active);
+    }
+    String screeningJob(int count)throws Exception {var input=vacancy(count);input.put("recruitmentMode","SCREENING");return postJson("/jobs",input,pubCookie,200).get("id").asText();}
+    String applyResume(String job,String id,Cookie cookie)throws Exception {
+        postJson("/jobs/"+job+"/apply",Map.of("resume","技能：Java与活动策划；经历：校园志愿服务"),cookie,200);
+        return jdbc.queryForObject("SELECT id FROM job_application WHERE job_id=? AND student_id=?",String.class,job,id);
+    }
+    String decisionPath(String job,String app){return "/jobs/"+job+"/applications/"+app+"/decision";}
+    @Test void screeningRequiresResumeAndKeepsApplicantsPrivateUntilAccepted()throws Exception {
+        String job=screeningJob(1);
+        for(Object invalid:List.of(Map.of(),Map.of("resume","   "),Map.of("resume","简".repeat(8001))))postJson("/jobs/"+job+"/apply",invalid,stuCookie,400);
+        String first=applyResume(job,student,stuCookie);
+        String secondStudent=create("STUDENT");Cookie secondCookie=session(secondStudent);
+        String second=applyResume(job,secondStudent,secondCookie);
+        String thirdStudent=create("STUDENT");String third=applyResume(job,thirdStudent,session(thirdStudent));
+        postJson("/jobs/"+job+"/apply",Map.of("resume","重复报名"),stuCookie,409);
+        String cipher=jdbc.queryForObject("SELECT resume_cipher FROM job_application WHERE id=?",String.class,first);
+        assertFalse(cipher.contains("技能"));assertEquals("技能：Java与活动策划；经历：校园志愿服务",crypto.decrypt(cipher));
+        var detail=getJson("/jobs/"+job,stuCookie,200);
+        assertEquals(3,detail.get("applications").asInt());assertEquals(0,detail.get("accepted_count").asInt());assertEquals(1,detail.get("remaining").asInt());
+        assertEquals(0,detail.get("participants").size());assertEquals("PENDING",detail.get("application_status").asText());assertTrue(detail.get("applied").asBoolean());
+        assertFalse(detail.toString().contains("技能"));assertFalse(getJson("/jobs",otherCookie,200).toString().contains("resume"));
+        var company=getJson("/companies/"+publisher+"/jobs",stuCookie,200).at("/items/0");assertEquals(3,company.get("applications").asInt());assertEquals(0,company.get("accepted_count").asInt());
+        getJson("/jobs/"+job+"/applicants",otherCookie,404);getJson("/jobs/"+job+"/applicants",stuCookie,404);
+        var applicants=getJson("/jobs/"+job+"/applicants",pubCookie,200);assertEquals(3,applicants.get("total").asInt());assertTrue(applicants.at("/items/0/resume").asText().contains("Java"));assertFalse(applicants.toString().contains("resume_cipher"));
+        postJson(decisionPath(job,first),Map.of("accepted",true),otherCookie,404);postJson(decisionPath(job,first),Map.of("accepted",true),stuCookie,404);
+        postJson(decisionPath(job,first),Map.of(),pubCookie,400);
+        postJson("/applications/"+first+"/payment",amount("1"),pubCookie,409);
+        postJson(decisionPath(job,second),Map.of("accepted",false),pubCookie,200);
+        assertEquals("REJECTED",getJson("/jobs/"+job,secondCookie,200).get("application_status").asText());assertEquals(1,messages(secondStudent,"JOB_REJECTED"));
+        postJson(decisionPath(job,first),Map.of("accepted",true),pubCookie,200);postJson(decisionPath(job,first),Map.of("accepted",true),pubCookie,200);
+        postJson(decisionPath(job,third),Map.of("accepted",true),pubCookie,409);
+        assertEquals(1,messages(student,"JOB_ACCEPTED"));
+        detail=getJson("/jobs/"+job,secondCookie,200);assertEquals(3,detail.get("applications").asInt());assertEquals(1,detail.get("accepted_count").asInt());assertEquals(0,detail.get("remaining").asInt());assertEquals(1,detail.get("participants").size());
+        assertEquals("REJECTED",getJson("/me/history",secondCookie,200).at("/items/0/application_status").asText());
+        String fourth=create("STUDENT");postJson("/jobs/"+job+"/apply",Map.of("resume","简历"),session(fourth),409);
+        postJson("/jobs/"+job+"/withdraw",Map.of(),stuCookie,200);
+        postJson(decisionPath(job,third),Map.of("accepted",true),pubCookie,200);
+        postJson("/wallet/top-up",amount("10"),pubCookie,200);
+        postJson("/applications/"+third+"/payment",amount("5"),pubCookie,200);assertEquals(500,balance(thirdStudent));
+        detail=getJson("/jobs/"+job,stuCookie,200);assertEquals(2,detail.get("applications").asInt());assertEquals(1,detail.get("accepted_count").asInt());
+    }
+    @Test void concurrentScreeningDecisionsCannotOverbook()throws Exception {
+        String job=screeningJob(1),first=applyResume(job,student,stuCookie),secondStudent=create("STUDENT");
+        String second=applyResume(job,secondStudent,session(secondStudent));
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(2);var gate=new java.util.concurrent.CountDownLatch(1);
+        try {
+            var results=new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for(String app:List.of(first,second))results.add(executor.submit(()->{gate.await();try{jobService.decide(job,app,users.byId(publisher),true);return true;}catch(org.springframework.web.server.ResponseStatusException e){assertEquals(409,e.getStatusCode().value());return false;}}));
+            gate.countDown();int accepted=0;for(var result:results)if(result.get(10,java.util.concurrent.TimeUnit.SECONDS))accepted++;
+            assertEquals(1,accepted);assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=? AND status='ACTIVE'",Integer.class,job));
+            assertEquals(1,messages(student,"JOB_ACCEPTED")+messages(secondStudent,"JOB_ACCEPTED"));
+            assertCapacity(job,0);
+        } finally {executor.shutdownNow();}
+    }
+    @Test void concurrentDecisionsForSameResumeConsumeExactlyOneSeat()throws Exception {
+        String job=screeningJob(3),app=applyResume(job,student,stuCookie);
+        assertCapacity(job,3);
+        var owner=users.byId(publisher);
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(8);var gate=new java.util.concurrent.CountDownLatch(1);
+        try {
+            var results=new ArrayList<java.util.concurrent.Future<?>>();
+            for(int i=0;i<8;i++)results.add(executor.submit(()->{gate.await();try{jobService.decide(job,app,owner,true);}catch(org.springframework.web.server.ResponseStatusException e){assertEquals(409,e.getStatusCode().value());}return null;}));
+            gate.countDown();for(var result:results)result.get(15,java.util.concurrent.TimeUnit.SECONDS);
+            assertCapacity(job,2);assertEquals(1,messages(student,"JOB_ACCEPTED"));
+        }finally{executor.shutdownNow();}
+    }
+    @Test void duplicateApplicationRollsBackItsSeatReservation()throws Exception {
+        String job=postJson("/jobs",vacancy(3),pubCookie,200).get("id").asText();
+        postJson("/jobs/"+job+"/apply",Map.of(),stuCookie,200);
+        var error=postJson("/jobs/"+job+"/apply",Map.of(),stuCookie,409);
+        assertTrue(error.get("message").asText().contains("已有你的报名记录"));
+        assertCapacity(job,2);assertEquals(1,messages(publisher,"JOB_JOINED"));
+        assertThrows(org.springframework.dao.DuplicateKeyException.class,()->jdbc.update("INSERT INTO job_application(id,job_id,student_id) VALUES(?,?,?)",UUID.randomUUID().toString(),job,student));
+    }
+    @Test void concurrentDuplicateApplicationsOnlyCreateOneRecord()throws Exception {
+        String job=postJson("/jobs",vacancy(3),pubCookie,200).get("id").asText();var actor=users.byId(student);
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(8);var gate=new java.util.concurrent.CountDownLatch(1);
+        try {
+            var results=new ArrayList<java.util.concurrent.Future<Boolean>>();
+            for(int i=0;i<8;i++)results.add(executor.submit(()->{gate.await();try{jobService.apply(job,actor);return true;}catch(org.springframework.web.server.ResponseStatusException e){assertEquals(409,e.getStatusCode().value());return false;}}));
+            gate.countDown();int successes=0;for(var result:results)if(result.get(15,java.util.concurrent.TimeUnit.SECONDS))successes++;
+            assertEquals(1,successes);assertCapacity(job,2);
+            assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=?",Integer.class,job));assertEquals(1,messages(publisher,"JOB_JOINED"));
+        }finally{executor.shutdownNow();}
+    }
+    @Test void concurrentWithdrawalsReleaseSeatOnlyOnceAndPendingWithdrawalReleasesNone()throws Exception {
+        String job=postJson("/jobs",vacancy(2),pubCookie,200).get("id").asText();
+        postJson("/jobs/"+job+"/apply",Map.of(),stuCookie,200);var actor=users.byId(student);
+        var executor=java.util.concurrent.Executors.newFixedThreadPool(2);var gate=new java.util.concurrent.CountDownLatch(1);
+        try {
+            var results=new ArrayList<java.util.concurrent.Future<?>>();
+            for(int i=0;i<2;i++)results.add(executor.submit(()->{gate.await();jobService.withdraw(job,actor);return null;}));
+            gate.countDown();for(var result:results)result.get(15,java.util.concurrent.TimeUnit.SECONDS);
+            assertCapacity(job,2);assertEquals(1,messages(publisher,"JOB_WITHDRAWN"));
+        }finally{executor.shutdownNow();}
+        String screening=screeningJob(2);applyResume(screening,student,stuCookie);
+        assertCapacity(screening,2);postJson("/jobs/"+screening+"/withdraw",Map.of(),stuCookie,200);assertCapacity(screening,2);
+    }
+    @Test void screeningStopsAfterWithdrawalCancellationAndStart()throws Exception {
+        String job=screeningJob(2),first=applyResume(job,student,stuCookie),secondStudent=create("STUDENT");Cookie secondCookie=session(secondStudent);
+        String second=applyResume(job,secondStudent,secondCookie);
+        postJson("/jobs/"+job+"/withdraw",Map.of(),stuCookie,200);
+        postJson(decisionPath(job,first),Map.of("accepted",true),pubCookie,409);
+        assertEquals(1,getJson("/jobs/"+job,pubCookie,200).get("applications").asInt());
+        postJson("/jobs/"+job+"/cancel",Map.of("reason","延期"),pubCookie,200);
+        assertEquals(1,messages(secondStudent,"JOB_CANCELLED"));assertEquals(0,messages(student,"JOB_CANCELLED"));
+        postJson(decisionPath(job,second),Map.of("accepted",true),pubCookie,409);
+        String begun=screeningJob(1),pending=applyResume(begun,student,stuCookie);
+        postJson(decisionPath(begun,second),Map.of("accepted",true),pubCookie,404);
+        jdbc.update("UPDATE job SET starts_at=? WHERE id=?",java.sql.Timestamp.valueOf("2020-01-01 09:00:00"),begun);
+        postJson(decisionPath(begun,pending),Map.of("accepted",true),pubCookie,409);
+        String direct=postJson("/jobs",vacancy(1),pubCookie,200).get("id").asText();
+        postJson("/jobs/"+direct+"/apply",Map.of(),secondCookie,200);
+        assertEquals("DIRECT",getJson("/jobs/"+direct,secondCookie,200).get("recruitment_mode").asText());
+        String app=jdbc.queryForObject("SELECT id FROM job_application WHERE job_id=?",String.class,direct);
+        postJson(decisionPath(direct,app),Map.of("accepted",false),pubCookie,409);
+    }
     @Test void notificationsRespectOwnershipReadStateAndReviewOutcome()throws Exception {
         String review=UUID.randomUUID().toString();
         jdbc.update("UPDATE student_user SET verification_status='PENDING',review_id=? WHERE id=?",review,student);
@@ -102,6 +233,7 @@ class ProfileWalletIntegrationTest {
         String rollbackJob=postJson("/jobs",vacancy(1),pubCookie,200).get("id").asText();long before=messages(publisher,"JOB_JOINED");
         new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(tx->{jobService.apply(rollbackJob,users.byId(student));tx.setRollbackOnly();});
         assertEquals(before,messages(publisher,"JOB_JOINED"));assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=?",Integer.class,rollbackJob));
+        assertCapacity(rollbackJob,1);
     }
     @Test void concurrentCancelAndPayCannotBothSucceed()throws Exception {
         String app=application();String job=jdbc.queryForObject("SELECT job_id FROM job_application WHERE id=?",String.class,app);
@@ -182,6 +314,7 @@ class ProfileWalletIntegrationTest {
             gate.countDown();int joined=0;for(var f:futures)if(f.get(15,java.util.concurrent.TimeUnit.SECONDS))joined++;
             assertEquals(1,joined);assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM job_application WHERE job_id=?",Integer.class,id));
             assertEquals(0,getJson("/jobs/"+id,stuCookie,200).get("remaining").asInt());
+            assertCapacity(id,0);
         } finally {executor.shutdownNow();}
     }
     @Test void jobValidationAndStartedJobCannotBeJoined()throws Exception {

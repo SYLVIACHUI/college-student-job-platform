@@ -14,6 +14,11 @@ const categories = [
 </script>
 <template>
   <form @submit.prevent="emit('submit')" class="job-publish-form">
+    <label>参加方式<select v-model="form.recruitmentMode" required>
+      <option value="DIRECT">直接参加 · 报名即占用名额</option>
+      <option value="SCREENING">简历筛选 · 企业录取后才能参加</option>
+    </select></label>
+    <p v-if="form.recruitmentMode === 'SCREENING'" class="muted">学生提交在线简历后进入待筛选名单。报名人数可超过需要人数，企业录取后才占用名额。</p>
     <label
       >标题<input
         v-model.trim="form.title"
